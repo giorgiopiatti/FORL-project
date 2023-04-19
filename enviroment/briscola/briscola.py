@@ -2,12 +2,12 @@ from collections import OrderedDict
 import numpy as np
 
 from rlcard.envs import Env
-from briscola.card import Card
+from enviroment.briscola.card import Card
 from typing import List, Tuple
-from briscola.player import BriscolaPlayerState
-from briscola.actions import BriscolaAction
+from enviroment.briscola.player_state import BriscolaPlayerState
+from enviroment.briscola.actions import BriscolaAction, PlayCardAction
 
-from briscola import Game
+from enviroment.briscola import Game
 
 
 class BriscolaEnv(Env):
@@ -24,6 +24,8 @@ class BriscolaEnv(Env):
         self.game = Game()
         super().__init__(config)
 
+        self.state_shape = (49, 41)
+
     def _extract_state(self, state: BriscolaPlayerState):
         ''' Encode state:
             last dim is card encoding = 40
@@ -31,33 +33,38 @@ class BriscolaEnv(Env):
             state (dict): dict of original state
         '''
 
-        trace = _trace2array(state.trace)  # shape=[8,5,5,40]
-        trace_round = _round2array(state.trace_round)  # shape=[5,40]
-        current_hand = _cards2array(state.current_hand)  # shape=[40]
-        others_hand = _cards2array(state.others_hand)    # shape=[40]
+        trace = _trace2array(state.trace)  # shape=[8,5,41]
+        trace_round = _round2array(state.trace_round)  # shape=[5,41]
+        current_hand = _cards2array(state.current_hand)  # shape=[41]
+        other_hands = _cards2array(state.other_hands)    # shape=[41]
 
-        called_card = _cards2array([state.called_card]),  # shape[40]
+        called_card = _cards2array([state.called_card])  # shape[41]
 
         info = [
             state.caller_id,
-            state.caller_points_bet,
+            # state.caller_points_bet,
             *state.points,
-            state.role,
+            state.role.value,
             state.player_id]
-        padded_40_info = np.pad(info, (0, 40 - len(info)), 'constant')
+        padded_40_info = np.pad(
+            info, (0, self.state_shape[1] - len(info)), 'constant')
 
-        obs = np.concatenate((padded_40_info,
-                              called_card,
-                              current_hand,
-                              others_hand,
+        obs = np.concatenate((np.expand_dims(padded_40_info, axis=0),
+                              np.expand_dims(called_card, axis=0),
+                              np.expand_dims(current_hand, axis=0),
+                              np.expand_dims(other_hands, axis=0),
                               trace.reshape(
-                                  [trace.shape[0]*trace.shape[1]*trace.shape[2], 40]),
+                                  [trace.shape[0]*trace.shape[1], self.state_shape[1]]),
                               trace_round
                               ))
 
         extracted_state = OrderedDict(
             {'obs': obs, 'legal_actions': self._get_legal_actions(state)})
         extracted_state['action_record'] = self.action_recorder
+        extracted_state['raw_legal_actions'] = [a for a in state.actions]
+        extracted_state['raw_debug_state'] = state
+
+        assert obs.shape == self.state_shape
         return extracted_state
 
     def get_payoffs(self):
@@ -66,7 +73,7 @@ class BriscolaEnv(Env):
         Returns:
             payoffs (list): a list of payoffs for each player
         '''
-        return self.game.judger.judge_payoffs(self.game.caller_id, self.game.calle_id)
+        return self.game.judger.judge_payoffs(self.game.caller_id, self.game.callee_id)
 
     def _decode_action(self, action_id) -> BriscolaAction:
         ''' Action id -> the action in the game. Must be implemented in the child class.
@@ -77,7 +84,8 @@ class BriscolaEnv(Env):
         Returns:
             action : the action that will be passed to the game engine.
         '''
-        return BriscolaAction.from_action_id(action_id)
+        if action_id < 40:
+            return PlayCardAction.from_action_id(action_id)
 
     def _get_legal_actions(self, state: BriscolaPlayerState):
         ''' Get all legal actions for current state
@@ -86,7 +94,8 @@ class BriscolaEnv(Env):
             legal_actions (list): a list of legal actions' id
         '''
         legal_actions = state.actions
-        legal_actions = [a.to_action_id() for a in legal_actions]
+        legal_actions = OrderedDict(
+            {a.to_action_id(): None for a in legal_actions})
         return legal_actions
 
     # def get_action_feature(self, action):
@@ -109,22 +118,25 @@ def _cards2array(cards: List[Card]):
     for card in cards:
         matrix[card.get_index_suit(), card.get_index_rank()] = 1
 
-    return matrix.flatten('F')
+    matrix = matrix.flatten('F')
+    matrix = np.append(matrix, [0])
+    return matrix
 
 
-def _trace2array(trace: List[List[Tuple(int, Card)]]):
+def _trace2array(trace: List[List[Tuple[int, Card]]]):
     enc = np.zeros(
-        [8, 5, len(Card.valid_suit)*len(Card.valid_rank)], dtype=np.int8)
+        [8, 5, len(Card.valid_suit)*len(Card.valid_rank) + 1], dtype=np.int8)
     for i in range(len(trace)):
         enc[i] = _round2array(trace[i])
 
     return enc
 
 
-def _round2array(round: List[Tuple(int, Card)]):
+def _round2array(round: List[Tuple[int, Card]]):
     enc = np.zeros(
-        [5, len(Card.valid_suit)*len(Card.valid_rank)], dtype=np.int8)
-    for move in round:
-        enc[move[0]] = _cards2array([move[1]])
+        [5, len(Card.valid_suit)*len(Card.valid_rank) + 1], dtype=np.int8)
+    for i, move in enumerate(round):
+        enc[move[0].player_id] = _cards2array([move[1].card])
+        enc[move[0].player_id, enc.shape[1]-1] = i
 
     return enc

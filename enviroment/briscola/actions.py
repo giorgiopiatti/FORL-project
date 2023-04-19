@@ -1,4 +1,4 @@
-from card import Card
+from enviroment.briscola.card import Card
 
 from abc import (
     ABC,
@@ -12,10 +12,6 @@ class BriscolaAction(ABC):
     @abstractmethod
     def __str__(self) -> str:
         return super().__str__()
-
-    @staticmethod @ abstractmethod
-    def from_action_id(action_id):
-        pass
 
     @abstractmethod
     def to_action_id(self):
@@ -37,6 +33,9 @@ class PlayCardAction(BriscolaAction):
 
     def to_action_id(self):
         return PLAY_ACTION_STR_TO_ID[str(self.card)]
+
+    def __repr__(self) -> str:
+        return f'{self.card}'
 
 
 PLAY_ACTION_ID_TO_STR = {0: 'AS', 1: '2S', 2: '3S', 3: '4S', 4: '5S', 5: '6S', 6: '7S', 7: 'JS', 8: 'QS', 9: 'KS', 10: 'AH', 11: '2H', 12: '3H', 13: '4H', 14: '5H', 15: '6H', 16: '7H', 17: 'JH', 18: 'QH',

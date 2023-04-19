@@ -1,11 +1,6 @@
-# -*- coding: utf-8 -*-
-''' Implement Doudizhu Dealer class
-'''
 import functools
 
-
-from briscola.utils import cards2str, briscola_sort_card
-from briscola.card import Card
+from enviroment.briscola.card import Card
 
 
 def init_40_deck():
@@ -29,7 +24,7 @@ class BriscolaDealer:
         '''
         self.np_random = np_random
         self.deck = init_40_deck()
-        self.deck.sort(key=functools.cmp_to_key(briscola_sort_card))
+        self.deck.sort()
 
     def shuffle(self):
         ''' Randomly shuffle the deck
@@ -40,11 +35,11 @@ class BriscolaDealer:
         ''' Deal cards to players
 
         Args:
-            players (list): list of DoudizhuPlayer objects
+            players (list): list of BriscolaPlayer objects
         '''
         hand_num = 8
         for index, player in enumerate(players):
             current_hand = self.deck[index*hand_num:(index+1)*hand_num]
-            current_hand.sort(key=functools.cmp_to_key(briscola_sort_card))
+            current_hand.sort()
             player.set_current_hand(current_hand)
             player.initial_hand = player.current_hand

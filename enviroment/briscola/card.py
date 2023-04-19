@@ -2,6 +2,9 @@
 '''
 
 
+from enviroment.briscola.utils import CARD_RANK_WITHIN_SUIT_INDEX
+
+
 class Card:
     '''
     Card stores the suit and rank of a single card
@@ -46,6 +49,14 @@ class Card:
         '''
         return self.rank + self.suit
 
+    def __repr__(self):
+        ''' Get string representation of a card.
+
+        Returns:
+            string: the combination of rank and suit of a card. Eg: AS, 5H, JD, 3C, ...
+        '''
+        return self.rank + self.suit
+
     def get_index(self):
         ''' Get index of a card.
 
@@ -63,3 +74,9 @@ class Card:
     @staticmethod
     def init_from_string(card_string):
         return Card(rank=card_string[0], suit=card_string[1])
+
+    def __lt__(self, other):
+        if self.suit == other.suit:
+            return CARD_RANK_WITHIN_SUIT_INDEX[self.rank] < CARD_RANK_WITHIN_SUIT_INDEX[other.rank]
+        else:
+            return self.suit < other.suit

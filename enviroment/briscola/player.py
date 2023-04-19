@@ -2,49 +2,13 @@
 '''
 import functools
 
-from briscola.utils import cards2str, briscola_sort_card
+from enviroment.briscola.utils import cards2str
 from typing import List, Tuple
-from briscola.card import Card
-from briscola.game import BriscolaPublicState
-from briscola.actions import BriscolaAction, PlayCardAction
-
-
-class BriscolaPlayerState:
-    # Public Information
-    caller_id: int
-    caller_points_bet: int
-    called_card: Card
-
-    """
-    List of round traces, inner list has dimension 5
-    """
-    trace: List[List[Tuple(int, Card)]]
-    trace_round: List[Tuple(int, Card)]
-    points: List[int]
-
-    # Player private Information
-    role: str
-    player_id: int
-    current_hand: List[str]
-    others_hand: List[str]
-    actions: List[BriscolaAction]
-
-    def __init__(self, public: BriscolaPublicState,
-                 role: str, player_id: int,  current_hand: List[str],
-                 others_hand: List[str], actions: List[str]) -> None:
-        self.caller_id = public.caller_id
-        self.caller_points_bet = public.caller_points_bet
-        self.called_card = public.called_card
-        self.trace = public.trace
-        self.trace_round = public.trace_round
-        self.points = public.points
-
-        # Private info
-        self.role = role
-        self.player_id = player_id
-        self.current_hand = current_hand
-        self.others_hand = others_hand
-        self.actions = actions
+from enviroment.briscola.card import Card
+from enviroment.briscola.game import BriscolaPublicState
+from enviroment.briscola.actions import BriscolaAction, PlayCardAction
+from enviroment.briscola.player_state import BriscolaPlayerState
+from enviroment.briscola.utils import Roles
 
 
 class BriscolaPlayer:
@@ -69,7 +33,7 @@ class BriscolaPlayer:
         self.player_id = player_id
         self.initial_hand: List[Card] = None
         self._current_hand: List[Card] = []
-        self.role = ''
+        self.role = Roles.GOOD_PLAYER
         self.played_cards = None
 
         # record cards removed from self._current_hand for each play()
@@ -77,19 +41,19 @@ class BriscolaPlayer:
         self._recorded_played_cards = []
 
     @property
-    def current_hand(self):
+    def current_hand(self) -> List[Card]:
         return self._current_hand
 
     def set_current_hand(self, value):
         self._current_hand = value
 
-    def get_state(self, public, others_hands):
+    def get_state(self, public, other_hands):
         state = BriscolaPlayerState(
             public=public,
             role=self.role,
             player_id=self.player_id,
             current_hand=self._current_hand,
-            others_hands=others_hands,
+            other_hands=other_hands,
             actions=self.available_actions()
         )
         return state
@@ -106,10 +70,10 @@ class BriscolaPlayer:
         '''
         self.played_cards = action
         for i, remain_card in enumerate(self._current_hand):
-            if action == remain_card:
+            if action.card == remain_card:
                 self._current_hand.remove(self._current_hand[i])
                 break
-        self._recorded_played_cards.append(action)
+        self._recorded_played_cards.append(action.card)
         return self
 
     def play_back(self):
@@ -117,4 +81,7 @@ class BriscolaPlayer:
         '''
         removed_cards = self._recorded_played_cards.pop()
         self._current_hand.extend(removed_cards)
-        self._current_hand.sort(key=functools.cmp_to_key(briscola_sort_card))
+        self._current_hand.sort()
+
+    def __repr__(self) -> str:
+        return f'Player {self.player_id}'

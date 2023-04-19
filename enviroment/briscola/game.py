@@ -3,43 +3,15 @@
 import functools
 from heapq import merge
 import numpy as np
-from briscola.dealer import BriscolaDealer
+from enviroment.briscola.dealer import BriscolaDealer
+from enviroment.briscola.public_state import BriscolaPublicState
 
-from briscola.utils import briscola_sort_card, cards2str
-from briscola.player import BriscolaPlayer
-from briscola.round import BriscolaRound
-from briscola.judger import BriscolaJudger
-from briscola.card import Card
+from enviroment.briscola.utils import CARD_RANK_WITHIN_SUIT, Roles, DEBUG_ENV
+from enviroment.briscola.player import BriscolaPlayer
+from enviroment.briscola.round import BriscolaRound
+from enviroment.briscola.judger import BriscolaJudger
+from enviroment.briscola.card import Card
 from typing import List, Tuple
-
-
-class BriscolaPublicState:
-    caller_id: int
-    caller_points_bet: int
-    called_card: Card
-
-    """
-    List of round traces, inner list has dimension 5
-    """
-    trace: List[List[Tuple(int, Card)]]
-    trace_round: List[Tuple(int, Card)]
-    points: List[int]
-
-    def __init__(self, caller_id, caller_points_bet, called_card) -> None:
-        self.caller_points_bet = caller_points_bet
-        self.caller_id = caller_id
-        self.called_card = called_card
-        self.trace = []
-        self.trace_round = []
-        self.points = []
-
-    def update_state_on_round_end(self, points):
-        self.trace.append(self.trace_round)
-        self.trace_round = []
-        self.points = points
-
-    def update_state_on_round_step(self, round: BriscolaRound):
-        self.trace_round = round.trace
 
 
 class BriscolaGame:
@@ -74,35 +46,70 @@ class BriscolaGame:
 
         # Initial bet
         self.dummy_bet()
-        self.calle_id = self.get_calle_id()
+        self.callee_id = self.get_callee_id()
+        self.players[self.caller_id].role = Roles.CALLER
+        self.players[self.callee_id].role = Roles.CALLEE
 
         self.round = BriscolaRound(self.caller_id, self.briscola_suit)
-        self.round.initiate(self.players)
 
         # initialize judger
         self.judger = BriscolaJudger(self.players,
                                      self.caller_id,
-                                     self.called_card,
+                                     self.callee_id,
                                      self.caller_points_bet)
-
-        # get state of first player
-        player_id = self.round.current_player
-        self.state = self.get_state(player_id)
 
         # Public state visible to everyone
         self.public = BriscolaPublicState(
             self.caller_id, self.caller_points_bet, self.called_card)
 
+        # get state of first player
+        player_id = self.round.current_player
+        self.state = self.get_state(player_id)
+
+        if DEBUG_ENV:
+            for i in range(5):
+                print(self.get_state(i))
+            print(
+                f'Briscola: {self.briscola_suit} called_card: {self.called_card}')
+
         return self.state, player_id
 
     def dummy_bet(self):
         self.caller_id = self.np_random.choice(5, 1)[0]
+        self.caller_points_bet = None
 
-        self.briscola_suit
-        self.called_card
-        self.caller_points_bet
+        hand_strengthens = {'S': 0, 'H': 0, 'D': 0, 'C': 0}
+        for card in self.players[self.caller_id].current_hand:
+            if card.rank == 'A':
+                hand_strengthens[card.suit] += 40
+            elif card.rank == '3':
+                hand_strengthens[card.suit] += 39
+            elif card.rank == 'K':
+                hand_strengthens[card.suit] += 14
+            elif card.rank == 'Q':
+                hand_strengthens[card.suit] += 13
+            elif card.rank == 'J':
+                hand_strengthens[card.suit] += 12
+            else:
+                hand_strengthens[card.suit] += int(card.rank)
 
-    def get_calle_id(self):
+        self.briscola_suit = max(hand_strengthens, key=hand_strengthens.get)
+
+        current_hand_briscola = list(filter(
+            lambda c: c.suit == self.briscola_suit, self.players[self.caller_id].current_hand))
+        rank_called_card = 'A'
+        rank_A_to_2 = CARD_RANK_WITHIN_SUIT.copy()
+        rank_A_to_2.reverse()
+        current_hand_briscola.sort(reverse=True)
+        for i, card in enumerate(current_hand_briscola):
+            if card.rank == rank_A_to_2[i]:
+                rank_called_card = rank_A_to_2[i+1]
+            else:
+                break
+
+        self.called_card = Card(suit=self.briscola_suit, rank=rank_called_card)
+
+    def get_callee_id(self):
         for player in self.players:
             current_hand = player.current_hand
             for c in current_hand:
@@ -126,12 +133,19 @@ class BriscolaGame:
             pass
 
         player = self.players[self.round.current_player]
+        player.play(action)
+        if DEBUG_ENV:
+            print(f'Player {player.player_id} -> {action.card}')
+
         self.round.proceed_round(player, action)
         self.round.update_current_player()
         self.public.update_state_on_round_step(self.round)
 
         # get next state
         if self.round.round_ended:
+            # NOTE Debug
+            if DEBUG_ENV:
+                print('----- Round END ----')
             winner, points = self.round.end_round()
             self.round = BriscolaRound(winner, self.briscola_suit)
             self.judger.points[winner] += points
@@ -140,7 +154,9 @@ class BriscolaGame:
         state = self.get_state(self.round.current_player)
         self.state = state
 
-        return state, self.round.get_current_player()
+        if DEBUG_ENV:
+            print(state)
+        return state, self.round.current_player
 
     def step_back(self):
         ''' Return to the previous state of the game
@@ -162,13 +178,13 @@ class BriscolaGame:
             (dict): The state of the player
         '''
         player = self.players[player_id]
-        others_hands = self._get_others_current_hand(player)
+        other_hands = self._get_others_current_hand(player)
 
-        state = player.get_state(self.public, others_hands)
+        state = player.get_state(self.public, other_hands)
 
         return state
 
-    @staticmethod
+    @ staticmethod
     def get_num_actions():
         ''' Return the total number of abstract acitons
 
@@ -199,17 +215,17 @@ class BriscolaGame:
         Returns:
             Bool: True(over) / False(not over)
         '''
-        if self.winner_id is None:
+        if len(self.public.trace) == 8:
+            return True
+        else:
             return False
-        return True
 
     def _get_others_current_hand(self, player) -> List[Card]:
         other_cards = []
         for i in range(1, 5):
             p = self.players[(player.player_id+i) % len(self.players)]
-            other_cards.append(p.current_hand)
+            other_cards.extend(p.current_hand)
 
-        others_hand = merge(
-            other_cards, key=functools.cmp_to_key(briscola_sort_card))
+        other_cards.sort()
 
-        return others_hand
+        return other_cards
