@@ -1,0 +1,32 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "teyx",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "self_play",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/self_play.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "DMC",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_DMC.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
