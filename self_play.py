@@ -18,6 +18,8 @@ from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy, \
 from enviroment.briscola_gym.briscola import BriscolaEnv
 from tianshou.env import PettingZooEnv 
 
+import shortuuid
+
 def env_func():
     return PettingZooEnv(BriscolaEnv())
 
@@ -77,7 +79,7 @@ def selfplay(args): # always train first agent, start from random policy
     # policy.set_eps(1)
     train_collector.collect(n_step=args.batch_size * args.training_num)
     # log
-    log_path = os.path.join(args.logdir, 'briscola5', 'dqn')
+    log_path = os.path.join(args.logdir, 'briscola5', 'dqn', shortuuid.uuid()[:8])
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
     logger = TensorboardLogger(writer)

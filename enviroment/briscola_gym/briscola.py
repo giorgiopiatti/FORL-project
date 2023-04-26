@@ -58,10 +58,12 @@ class BriscolaEnv(AECEnv):
         )
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
-        card_space = spaces.Tuple((spaces.Discrete(11), spaces.Discrete(5), spaces.Discrete(12)))  # (value, seed, points)
+        card_space = spaces.Box(low=0, high=11, shape=(3,))  # (value, seed, points)
         # (0,0,0) is used to pad, we encode 1-4 the suits, and 1-11 the rank
 
-        played_card_space = spaces.Dict({'turn': spaces.Tuple([spaces.Discrete(6)]), 'player': spaces.Tuple([spaces.Discrete(6)]), 'card': card_space})
+        player_id_space = spaces.Box(low=1, high=5, shape=(1,), dtype=np.int8)
+
+        played_card_space = spaces.Dict({'player': player_id_space, 'card': card_space}) #'turn': player_id_space, 
         round_space = spaces.Tuple([played_card_space]*5)
         # 0 is used for padding
 
@@ -70,10 +72,10 @@ class BriscolaEnv(AECEnv):
                 spaces.Dict(
                     {
                         "observation": spaces.Dict({
-                            'caller_id' : spaces.Tuple([spaces.Discrete(5+1)]),
-                            'points': spaces.Tuple([spaces.Discrete(120) for agent in self.agents]),
-                            'role': spaces.Tuple([spaces.Discrete(3+1)]),
-                            'player_id': spaces.Tuple([spaces.Discrete(5+1)]),
+                            'caller_id' : player_id_space,
+                            'points': spaces.Box(low=0, high=120, shape=(5,), dtype=np.int8),
+                            'role': spaces.Box(low=1, high=3, shape=(1,), dtype=np.int8),
+                            'player_id': player_id_space,
                             'called_card': card_space,
                             'current_hand': spaces.Tuple([card_space]*8),
                             'other_hands': spaces.Tuple([card_space]*32),
@@ -93,6 +95,7 @@ class BriscolaEnv(AECEnv):
 
 
         self.render_mode = render_mode
+        self.reset()
 
     def observation_space(self, agent):
         return self.observation_spaces[agent]
@@ -141,7 +144,8 @@ class BriscolaEnv(AECEnv):
         if seed is not None:
             self.seed(seed=seed)
         state, player_id = self.game.init_game()
-        self.agents = self.possible_agents[:]
+        np.random.shuffle(self.possible_agents)
+        self.agents = self.possible_agents
         self.agent_selection = self._int_to_name(player_id)
         self.rewards = self._convert_to_dict([0 for _ in range(self.num_agents)])
         self._cumulative_rewards = self._convert_to_dict(
@@ -304,14 +308,14 @@ def _trace2array(trace: List[List[Tuple[int, Card]]]):
 def _round2array(round: List[Tuple[int, Card]]):
     enc = []
     for i, move in enumerate(round):
-        enc.append(dict(turn=np.array([i+1]), player=np.array([move[0].player_id+1]), card=move[1].card.vector()))
+        enc.append(dict(player=np.array([move[0].player_id+1]), card=move[1].card.vector())) #turn=np.array([i+1]),
     return _pad_round(enc, 5)
 
 
 def _pad_round(lst: list, max_len: int):
     if len(lst) < max_len:
         for _ in range(max_len - len(lst)):
-            lst.append(dict(turn=np.array([0]), player=np.array([0]), card=NULLCARD_VECTOR))
+            lst.append(dict(player=np.array([0]), card=NULLCARD_VECTOR)) #turn=np.array([0]), 
     return lst
 
 def _pad_cards(lst: list, max_len: int):
