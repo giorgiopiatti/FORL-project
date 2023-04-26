@@ -4,6 +4,12 @@ pip install skrl
 pip install tianshou
 
 
-Now
+Reqeuirements
 pip3 install gymnasium pettingzoo
 pip install tianshou
+
+
+Documentation:
+- https://pettingzoo.farama.org/#
+- https://gymnasium.farama.org/
+- https://tianshou.readthedocs.io/en/master/
