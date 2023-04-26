@@ -95,7 +95,6 @@ class BriscolaEnv(AECEnv):
 
 
         self.render_mode = render_mode
-        self.reset()
 
     def observation_space(self, agent):
         return self.observation_spaces[agent]
@@ -144,7 +143,6 @@ class BriscolaEnv(AECEnv):
         if seed is not None:
             self.seed(seed=seed)
         state, player_id = self.game.init_game()
-        np.random.shuffle(self.possible_agents)
         self.agents = self.possible_agents
         self.agent_selection = self._int_to_name(player_id)
         self.rewards = self._convert_to_dict([0 for _ in range(self.num_agents)])
