@@ -67,6 +67,7 @@ def selfplay(args): # always train first agent, start from random policy
 
 
     # initialize agents and ma-policy
+    id_agent_learning = 0
     agents = [agent_learn, agent_fixed, agent_fixed, agent_fixed, agent_fixed]
     policy = MultiAgentPolicyManager(agents, env)
 
@@ -96,9 +97,10 @@ def selfplay(args): # always train first agent, start from random policy
             policy.policies[f'player_{i}'].set_eps(args.eps_test)
 
     def reward_metric(rews):
-        return rews[:, 0]
+        return rews[:, id_agent_learning]
 
     # trainer
+
     for i_gen in range(args.num_generation):
 
         trainer = OffpolicyTrainer(policy, train_collector, test_collector, args.epoch,
@@ -113,10 +115,16 @@ def selfplay(args): # always train first agent, start from random policy
                 if previous_best*1.05 < epoch_stat['test_reward']:
                     break
             previous_best = info['best_reward']
+
+            # Rotate learning agent position
+            policy.replace_policy(agent_fixed, env.agents[id_agent_learning])
+            id_agent_learning = (id_agent_learning + epoch) % 5
+            policy.replace_policy(agent_learn, env.agents[id_agent_learning])
            
         
-        for i in range(1,5):
-            policy.policies[f'player_{i}'].load_state_dict(policy.policies['player_0'].state_dict()) #Copy current agent
+        for i in range(0,5):
+            if i != id_agent_learning:
+                policy.policies[f'player_{i}'].load_state_dict(policy.policies[f'player_{id_agent_learning}'].state_dict()) #Copy current agent
 
         print('==={} Generations Evolved==='.format(i_gen+1))
     
