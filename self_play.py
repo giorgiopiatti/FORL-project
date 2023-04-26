@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Optional, Tuple
 from torch.utils.tensorboard import SummaryWriter
 
-from tianshou.utils import TensorboardLogger
+from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.env import DummyVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
@@ -34,6 +34,19 @@ def watch_selfplay(args, agent):
     print(f"Final reward: {rews[:, 0].mean()}")
 
 
+def get_agent(args, is_fixed=False):
+    net = Net(args.state_shape, args.action_shape,
+            hidden_sizes=args.hidden_sizes, device=args.device
+            ).to(args.device)
+    optim = torch.optim.Adam(net.parameters(), lr=args.lr)
+
+    if is_fixed:
+         optim = torch.optim.SGD(net.parameters(), lr=0)
+    agent = DQNPolicy(
+        net, optim, args.gamma, args.n_step,
+        target_update_freq=args.target_update_freq)
+    return agent
+
 def selfplay(args): # always train first agent, start from random policy
     train_envs = DummyVectorEnv([env_func for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
@@ -43,32 +56,15 @@ def selfplay(args): # always train first agent, start from random policy
     train_envs.seed(args.seed)
     test_envs.seed(args.seed)
 
-    # model
+    # Env
     briscola = BriscolaEnv()
     env = PettingZooEnv(briscola)
     args.state_shape = briscola.observation_space_shape
     args.action_shape = briscola.action_space_shape
 
-    net = Net(args.state_shape, args.action_shape,
-            hidden_sizes=args.hidden_sizes, device=args.device
-            ).to(args.device)
-    optim = torch.optim.Adam(net.parameters(), lr=args.lr)
-    agent_learn = DQNPolicy(
-        net, optim, args.gamma, args.n_step,
-        target_update_freq=args.target_update_freq)
-
-    net_fixed = Net(args.state_shape, args.action_shape,
-            hidden_sizes=args.hidden_sizes, device=args.device
-            ).to(args.device)
-    optim_fixed = torch.optim.SGD(net_fixed.parameters(), lr=0)
-    agent_fixed = DQNPolicy(
-        net_fixed, optim_fixed, args.gamma, args.n_step,
-        target_update_freq=args.target_update_freq)
-
-
     # initialize agents and ma-policy
     id_agent_learning = 0
-    agents = [agent_learn, agent_fixed, agent_fixed, agent_fixed, agent_fixed]
+    agents = [get_agent(args) , get_agent(args, is_fixed=True) , get_agent(args, is_fixed=True), get_agent(args, is_fixed=True), get_agent(args, is_fixed=True)]
     policy = MultiAgentPolicyManager(agents, env)
 
     # collector
@@ -79,11 +75,26 @@ def selfplay(args): # always train first agent, start from random policy
     test_collector = Collector(policy, test_envs, exploration_noise=True)
     # policy.set_eps(1)
     train_collector.collect(n_step=args.batch_size * args.training_num)
-    # log
-    log_path = os.path.join(args.logdir, 'briscola5', 'dqn', shortuuid.uuid()[:8])
+    
+    # Log
+    args.algo_name = "dqn"
+    log_name = os.path.join(args.algo_name, str(args.seed), "_", shortuuid.uuid()[:8])
+    log_path = os.path.join(args.logdir, log_name)
+    
+    if args.logger == "wandb":
+        logger = WandbLogger(
+            save_interval=1,
+            name=log_name.replace(os.path.sep, "__"),
+            run_id=args.resume_id,
+            config=args,
+            project=args.wandb_project,
+        )
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
-    logger = TensorboardLogger(writer)
+    if args.logger == "tensorboard":
+        logger = TensorboardLogger(writer)
+    else:  # wandb
+        logger.load(writer)
 
     def save_best_fn(policy):
         pass
@@ -100,7 +111,6 @@ def selfplay(args): # always train first agent, start from random policy
         return rews[:, id_agent_learning]
 
     # trainer
-
     for i_gen in range(args.num_generation):
 
         trainer = OffpolicyTrainer(policy, train_collector, test_collector, args.epoch,
@@ -117,9 +127,10 @@ def selfplay(args): # always train first agent, start from random policy
             previous_best = info['best_reward']
 
             # Rotate learning agent position
-            policy.replace_policy(agent_fixed, env.agents[id_agent_learning])
-            id_agent_learning = (id_agent_learning + epoch) % 5
-            policy.replace_policy(agent_learn, env.agents[id_agent_learning])
+            old_id_agent_learning = id_agent_learning
+            id_agent_learning = (id_agent_learning + 1) % 5
+            policy.replace_policy(agents[old_id_agent_learning], env.agents[id_agent_learning])
+            policy.replace_policy(agents[id_agent_learning], env.agents[old_id_agent_learning])
            
         
         for i in range(0,5):
@@ -198,6 +209,13 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
     )
+    parser.add_argument(
+        "--logger",
+        type=str,
+        default="tensorboard",
+        choices=["tensorboard", "wandb"],
+    )
+    parser.add_argument("--wandb-project", type=str, default="briscola")
     return parser
 
 def get_args() -> argparse.Namespace:
