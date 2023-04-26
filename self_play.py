@@ -18,20 +18,21 @@ from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy, \
 from enviroment.briscola_gym.briscola import BriscolaEnv
 from tianshou.env import PettingZooEnv 
 
+def env_func():
+    return PettingZooEnv(BriscolaEnv())
+
 def watch_selfplay(args, agent):
-    env = PettingZooEnv(BriscolaEnv())
+    test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
     agent.set_eps(args.eps_test)
-    policy = MultiAgentPolicyManager([agent, *[deepcopy(agent)]*4])
+    policy = MultiAgentPolicyManager([agent, *[deepcopy(agent)]*4], env_func())
     policy.eval()
-    collector = Collector(policy, env)
-    result = collector.collect(n_episode=1, render=args.render)
-    rews = result["rewards"]
+    collector = Collector(policy, test_envs)
+    result = collector.collect(n_episode=2)
+    rews = result["rews"]
     print(f"Final reward: {rews[:, 0].mean()}")
 
 
 def selfplay(args, num_generation=2): # always train first agent, start from random policy
-    def env_func():
-        return PettingZooEnv(BriscolaEnv())
     train_envs = DummyVectorEnv([env_func for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
     # seed
@@ -84,7 +85,7 @@ def selfplay(args, num_generation=2): # always train first agent, start from ran
         pass
 
     def stop_fn(mean_rewards):
-        return mean_rewards >= args.win_rate
+        return mean_rewards >= 0.1
 
     def train_fn(epoch, env_step):
         for i in range(5):
@@ -111,10 +112,10 @@ def selfplay(args, num_generation=2): # always train first agent, start from ran
 
         print('==={} Generations Evolved==='.format(i_gen+1))
     
-    model_save_path = os.path.join(args.logdir, 'briscola', 'dqn', 'policy_selfplay.pth')
+    model_save_path = os.path.join(args.logdir, 'briscola5', 'dqn', 'policy_selfplay.pth')
     torch.save(policy.policies['player_0'].state_dict(), model_save_path)
 
-    return result, policy.policies[0]
+    return result, policy.policies['player_0']
 
 
 
