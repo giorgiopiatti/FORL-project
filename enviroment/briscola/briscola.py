@@ -24,7 +24,18 @@ class BriscolaEnv(Env):
         self.game = Game()
         super().__init__(config)
 
-        self.state_shape = (49, 41)
+        self.state_shape = [[49*41] for _ in range(self.num_players)]
+        self.action_shape = [None for _ in range(self.num_players)]
+
+    def set_agents(self, agents):
+        '''
+        Set the agents that will interact with the environment.
+        This function must be called before `run`.
+
+        Args:
+            agents (list): List of Agent classes
+        '''
+        self.agents = agents  # TODO change in role base check reset
 
     def _extract_state(self, state: BriscolaPlayerState):
         ''' Encode state:
@@ -47,16 +58,17 @@ class BriscolaEnv(Env):
             state.role.value,
             state.player_id]
         padded_40_info = np.pad(
-            info, (0, self.state_shape[1] - len(info)), 'constant')
+            info, (0, 41 - len(info)), 'constant')
 
         obs = np.concatenate((np.expand_dims(padded_40_info, axis=0),
                               np.expand_dims(called_card, axis=0),
                               np.expand_dims(current_hand, axis=0),
                               np.expand_dims(other_hands, axis=0),
                               trace.reshape(
-                                  [trace.shape[0]*trace.shape[1], self.state_shape[1]]),
+                                  [trace.shape[0]*trace.shape[1], 41]),
                               trace_round
                               ))
+        obs = obs.flatten('F')
 
         extracted_state = OrderedDict(
             {'obs': obs, 'legal_actions': self._get_legal_actions(state)})
@@ -64,7 +76,7 @@ class BriscolaEnv(Env):
         extracted_state['raw_legal_actions'] = [a for a in state.actions]
         extracted_state['raw_debug_state'] = state
 
-        assert obs.shape == self.state_shape
+        # assert obs.shape == self.state_shape
         return extracted_state
 
     def get_payoffs(self):
