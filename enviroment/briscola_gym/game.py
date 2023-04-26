@@ -229,3 +229,6 @@ class BriscolaGame:
         other_cards.sort()
 
         return other_cards
+
+    def seed(self, seed):
+        self.np_random.seed(seed)

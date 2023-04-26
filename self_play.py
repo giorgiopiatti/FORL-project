@@ -6,10 +6,10 @@ from copy import deepcopy
 from typing import Optional, Tuple
 from torch.utils.tensorboard import SummaryWriter
 
-from tianshou.utils import BasicLogger
+from tianshou.utils import TensorboardLogger
 from tianshou.env import DummyVectorEnv
 from tianshou.utils.net.common import Net
-from tianshou.trainer import offpolicy_trainer
+from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy, \
     MultiAgentPolicyManager
@@ -32,19 +32,20 @@ def watch_selfplay(args, agent):
     print(f"Final reward: {rews[:, 0].mean()}")
 
 
-def selfplay(args, num_generation=2): # always train first agent, start from random policy
+def selfplay(args): # always train first agent, start from random policy
     train_envs = DummyVectorEnv([env_func for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    # train_envs.seed(args.seed)
-    # test_envs.seed(args.seed)
+    train_envs.seed(args.seed)
+    test_envs.seed(args.seed)
 
     # model
-    env = PettingZooEnv(BriscolaEnv())
-    args.state_shape = env.observation_space
-    args.action_shape = env.action_space
+    briscola = BriscolaEnv()
+    env = PettingZooEnv(briscola)
+    args.state_shape = briscola.observation_space_shape
+    args.action_shape = briscola.action_space_shape
 
     net = Net(args.state_shape, args.action_shape,
             hidden_sizes=args.hidden_sizes, device=args.device
@@ -79,14 +80,11 @@ def selfplay(args, num_generation=2): # always train first agent, start from ran
     log_path = os.path.join(args.logdir, 'briscola5', 'dqn')
     writer = SummaryWriter(log_path)
     writer.add_text("args", str(args))
-    logger = BasicLogger(writer)
+    logger = TensorboardLogger(writer)
 
-    def save_fn(policy):
+    def save_best_fn(policy):
         pass
-
-    def stop_fn(mean_rewards):
-        return mean_rewards >= 0.1
-
+    
     def train_fn(epoch, env_step):
         for i in range(5):
             policy.policies[f'player_{i}'].set_eps(args.eps_train)
@@ -99,13 +97,21 @@ def selfplay(args, num_generation=2): # always train first agent, start from ran
         return rews[:, 0]
 
     # trainer
-    for i_gen in range(num_generation):
-        result = offpolicy_trainer(
-            policy, train_collector, test_collector, args.epoch,
-            args.step_per_epoch, args.step_per_collect, args.test_num,
-            args.batch_size, train_fn=train_fn, test_fn=test_fn,
-            stop_fn=stop_fn, save_fn=save_fn, update_per_step=args.update_per_step,
+    for i_gen in range(args.num_generation):
+
+        trainer = OffpolicyTrainer(policy, train_collector, test_collector, args.epoch,
+            args.step_per_epoch, args.step_per_collect, episode_per_test=args.test_num,
+            batch_size=args.batch_size, train_fn=train_fn, test_fn=test_fn, #stop_fn=stop_fn
+            save_best_fn=save_best_fn, update_per_step=args.update_per_step,
             logger=logger, test_in_train=False, reward_metric=reward_metric)
+        
+        previous_best = None
+        for epoch, epoch_stat, info in trainer:
+            if previous_best is not None:
+                if previous_best*1.05 < epoch_stat['test_reward']:
+                    break
+            previous_best = info['best_reward']
+           
         
         for i in range(1,5):
             policy.policies[f'player_{i}'].load_state_dict(policy.policies['player_0'].state_dict()) #Copy current agent
@@ -121,6 +127,7 @@ def selfplay(args, num_generation=2): # always train first agent, start from ran
 
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    P = 64
     parser.add_argument('--seed', type=int, default=1626)
     parser.add_argument('--eps-test', type=float, default=0.05)
     parser.add_argument('--eps-train', type=float, default=0.1)
@@ -129,19 +136,20 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--gamma', type=float, default=0.9, help='a smaller gamma favors earlier win'
     )
-    parser.add_argument('--n-step', type=int, default=3)
+    parser.add_argument('--n-step', type=int, default=5)
     parser.add_argument('--target-update-freq', type=int, default=320)
     parser.add_argument('--epoch', type=int, default=50)
     parser.add_argument('--step-per-epoch', type=int, default=1000)
-    parser.add_argument('--step-per-collect', type=int, default=10)
+    parser.add_argument('--step-per-collect', type=int, default=P)
     parser.add_argument('--update-per-step', type=float, default=0.1)
-    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument(
         '--hidden-sizes', type=int, nargs='*', default=[128, 128, 128, 128]
     )
-    parser.add_argument('--training-num', type=int, default=16)
-    parser.add_argument('--test-num', type=int, default=16)
-    parser.add_argument('--logdir', type=str, default='log')
+    parser.add_argument('--training-num', type=int, default=P)
+    parser.add_argument('--num-generation', type=int, default=200)
+    parser.add_argument('--test-num', type=int, default=400)
+    parser.add_argument('--logdir', type=str, default='/cluster/scratch/piattigi/FORL_briscola/')
     parser.add_argument('--render', type=float, default=0.1)
     parser.add_argument(
         '--win-rate',

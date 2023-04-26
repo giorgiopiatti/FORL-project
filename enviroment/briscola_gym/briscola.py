@@ -2,7 +2,6 @@
 import numpy as np
 import functools
 
-from rlcard.envs import Env
 from enviroment.briscola_gym.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
 from enviroment.briscola_gym.player_state import BriscolaPlayerState
@@ -54,8 +53,8 @@ class BriscolaEnv(AECEnv):
 
 
         self.num_actions = 40
-        self.action_spaces = self._convert_to_dict(
-            [spaces.Discrete(40) for _ in range(self.num_agents)]
+        self.action_spaces = spaces.Dict(
+            {agent : spaces.Discrete(40) for agent in self.possible_agents}
         )
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
@@ -66,8 +65,8 @@ class BriscolaEnv(AECEnv):
         round_space = spaces.Tuple([played_card_space]*5)
         # 0 is used for padding
 
-        self.observation_spaces = self._convert_to_dict(
-            [
+        self.observation_spaces = spaces.Dict(
+            {agent:
                 spaces.Dict(
                     {
                         "observation": spaces.Dict({
@@ -87,8 +86,8 @@ class BriscolaEnv(AECEnv):
                         ),
                     }
                 )
-                for _ in range(self.num_agents)
-            ]
+                for agent in self.possible_agents
+            }
         )
       
 
@@ -96,11 +95,21 @@ class BriscolaEnv(AECEnv):
         self.render_mode = render_mode
 
     def observation_space(self, agent):
-        return spaces.flatdim(self.observation_spaces[agent]['observation'])
+        return self.observation_spaces[agent]
 
 
     def action_space(self, agent):
-        return spaces.flatdim(self.action_spaces[agent])
+        return self.action_spaces[agent]
+    
+    @property
+    def observation_space_shape(self):
+        return spaces.flatdim(self.observation_spaces['player_0']['observation'])
+
+    @property
+    def action_space_shape(self):
+        return spaces.flatdim(self.action_spaces['player_0'])
+
+    
 
     @property
     def _original_observation_space(self):
@@ -267,6 +276,9 @@ class BriscolaEnv(AECEnv):
 
     def _convert_to_dict(self, list_of_list):
         return dict(zip(self.possible_agents, list_of_list))
+    
+    def seed(self, seed):
+        self.game.seed(seed)
 
 
 def _cards2array(cards: List[Card]):
