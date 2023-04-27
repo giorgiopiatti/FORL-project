@@ -34,6 +34,7 @@ def env(render_mode=None):
     env = wrappers.OrderEnforcingWrapper(env)
     return env
 
+
 class BriscolaEnv(AECEnv):
     ''' Briscola Environment
 
@@ -49,21 +50,22 @@ class BriscolaEnv(AECEnv):
         self.screen = None
         if not hasattr(self, "agents"):
             self.agents = [f"player_{i}" for i in range(5)]
-        self.possible_agents = self.agents[:]
-
-
+        self.possible_agents = self.agents
         self.num_actions = 40
         self.action_spaces = spaces.Dict(
-            {agent : spaces.Discrete(40) for agent in self.possible_agents}
+            {agent: spaces.Discrete(40) for agent in self.agents}
         )
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
-        card_space = spaces.Box(low=0, high=11, shape=(3,))  # (value, seed, points)
+        # (value, seed, points)
+        card_space = spaces.Box(low=np.array([0, 0, 0]), high=np.array([
+                                11, 4, 11]), shape=(3,), dtype=np.int8)
         # (0,0,0) is used to pad, we encode 1-4 the suits, and 1-11 the rank
 
         player_id_space = spaces.Box(low=1, high=5, shape=(1,), dtype=np.int8)
 
-        played_card_space = spaces.Dict({'player': player_id_space, 'card': card_space}) #'turn': player_id_space, 
+        played_card_space = spaces.Dict(
+            {'player': player_id_space, 'card': card_space})  # 'turn': player_id_space,
         round_space = spaces.Tuple([played_card_space]*5)
         # 0 is used for padding
 
@@ -72,7 +74,7 @@ class BriscolaEnv(AECEnv):
                 spaces.Dict(
                     {
                         "observation": spaces.Dict({
-                            'caller_id' : player_id_space,
+                            'caller_id': player_id_space,
                             'points': spaces.Box(low=0, high=120, shape=(5,), dtype=np.int8),
                             'role': spaces.Box(low=1, high=3, shape=(1,), dtype=np.int8),
                             'player_id': player_id_space,
@@ -88,21 +90,18 @@ class BriscolaEnv(AECEnv):
                         ),
                     }
                 )
-                for agent in self.possible_agents
-            }
+                for agent in self.agents
+             }
         )
-      
-
 
         self.render_mode = render_mode
 
     def observation_space(self, agent):
         return self.observation_spaces[agent]
 
-
     def action_space(self, agent):
         return self.action_spaces[agent]
-    
+
     @property
     def observation_space_shape(self):
         return spaces.flatdim(self.observation_spaces['player_0']['observation'])
@@ -110,8 +109,6 @@ class BriscolaEnv(AECEnv):
     @property
     def action_space_shape(self):
         return spaces.flatdim(self.action_spaces['player_0'])
-
-    
 
     @property
     def _original_observation_space(self):
@@ -129,8 +126,9 @@ class BriscolaEnv(AECEnv):
             return
         if self.render_mode == 'terminal':
             player_id = self._name_to_int(self.agent_selection)
-            print(f'Player Turn {self.agent_selection}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, Current Round {self.game.round.trace}')
-    
+            print(
+                f'Player Turn {self.agent_selection}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, Current Round {self.game.round.trace}')
+
     def close(self):
         """
         Close should release any graphical displays, subprocesses, network connections
@@ -143,9 +141,9 @@ class BriscolaEnv(AECEnv):
         if seed is not None:
             self.seed(seed=seed)
         state, player_id = self.game.init_game()
-        self.agents = self.possible_agents
         self.agent_selection = self._int_to_name(player_id)
-        self.rewards = self._convert_to_dict([0 for _ in range(self.num_agents)])
+        self.rewards = self._convert_to_dict(
+            [0 for _ in range(self.num_agents)])
         self._cumulative_rewards = self._convert_to_dict(
             [0 for _ in range(self.num_agents)]
         )
@@ -163,10 +161,8 @@ class BriscolaEnv(AECEnv):
 
         return self._last_obs
 
-
     def observe(self, agent):
         state = self.game.get_state(self._name_to_int(agent))
-    
 
         legal_moves = self._get_legal_actions(state)
         action_mask = np.zeros(self.num_actions, "int8")
@@ -175,14 +171,13 @@ class BriscolaEnv(AECEnv):
 
         return dict({"observation": self._extract_state(state), "action_mask": action_mask})
 
-    
     def step(self, action):
         if (
             self.terminations[self.agent_selection]
             or self.truncations[self.agent_selection]
         ):
             return self._was_dead_step(action)
-        
+
         action = self._decode_action(action)
         next_state, next_player_id = self.game.step(action)
         next_player = self._int_to_name(next_player_id)
@@ -190,7 +185,6 @@ class BriscolaEnv(AECEnv):
 
         self._last_obs = self.observe(self.agent_selection)
 
-    
         if self.game.is_over():
             self.rewards = self._convert_to_dict(
                 self._scale_rewards(self._get_payoffs())
@@ -203,9 +197,8 @@ class BriscolaEnv(AECEnv):
                 [False for _ in range(self.num_agents)]
             )
         else:
-            self.next_legal_moves = self._get_legal_actions(self.game.get_state(next_player_id))
-        
-       
+            self.next_legal_moves = self._get_legal_actions(
+                self.game.get_state(next_player_id))
 
         self._cumulative_rewards[self.agent_selection] = 0
         self.agent_selection = next_player
@@ -222,19 +215,19 @@ class BriscolaEnv(AECEnv):
             state (dict): dict of original state
         '''
 
-        state= dict(
+        encoding = dict(
             caller_id=np.array([state.caller_id+1]),
             points=state.points,
             role=np.array([state.role.value]),
-            player_id=np.array([state.player_id+1]), 
+            player_id=np.array([state.player_id+1]),
             called_card=state.called_card.vector(),
-            current_hand=_pad_cards(_cards2array(state.current_hand),8),
-            other_hands= _pad_cards(_cards2array(state.other_hands),32),   
+            current_hand=_pad_cards(_cards2array(state.current_hand), 8),
+            other_hands=_pad_cards(_cards2array(state.other_hands), 32),
             trace=_trace2array(state.trace),
             trace_round=_round2array(state.trace_round)
         )
-        #return state
-        return spaces.utils.flatten(self._original_observation_space, state)
+        # return state
+        return spaces.utils.flatten(self._original_observation_space, encoding)
 
     def _get_payoffs(self):
         ''' Get the payoffs of players. Must be implemented in the child class.
@@ -266,32 +259,29 @@ class BriscolaEnv(AECEnv):
         legal_actions = dict(
             {a.to_action_id(): None for a in legal_actions})
         return legal_actions
-    
+
     def _scale_rewards(self, reward):
         return reward
 
     def _int_to_name(self, ind):
-        return self.possible_agents[ind]
+        return self.agents[ind]
 
     def _name_to_int(self, name):
-        return self.possible_agents.index(name)
+        return self.agents.index(name)
 
     def _convert_to_dict(self, list_of_list):
-        return dict(zip(self.possible_agents, list_of_list))
-    
+        return dict(zip(self.agents, list_of_list))
+
     def seed(self, seed):
         self.game.seed(seed)
 
 
 def _cards2array(cards: List[Card]):
-    """
-    Encoding of cards in a vector of dim 4*10
-        result[i] == 1 <==> card i is present in card
-    """
     matrix = []
     for card in cards:
         matrix.append(card.vector())
     return matrix
+
 
 def _trace2array(trace: List[List[Tuple[int, Card]]]):
     enc = []
@@ -306,15 +296,19 @@ def _trace2array(trace: List[List[Tuple[int, Card]]]):
 def _round2array(round: List[Tuple[int, Card]]):
     enc = []
     for i, move in enumerate(round):
-        enc.append(dict(player=np.array([move[0].player_id+1]), card=move[1].card.vector())) #turn=np.array([i+1]),
+        # turn=np.array([i+1]),
+        enc.append(dict(player=np.array(
+            [move[0].player_id+1]), card=move[1].card.vector()))
     return _pad_round(enc, 5)
 
 
 def _pad_round(lst: list, max_len: int):
     if len(lst) < max_len:
         for _ in range(max_len - len(lst)):
-            lst.append(dict(player=np.array([0]), card=NULLCARD_VECTOR)) #turn=np.array([0]), 
+            # turn=np.array([0]),
+            lst.append(dict(player=np.array([0]), card=NULLCARD_VECTOR))
     return lst
+
 
 def _pad_cards(lst: list, max_len: int):
     if len(lst) < max_len:

@@ -16,12 +16,14 @@ from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy, \
 
 
 from enviroment.briscola_gym.briscola import BriscolaEnv
-from tianshou.env import PettingZooEnv 
+from tianshou.env import PettingZooEnv
 
 import shortuuid
 
+
 def env_func():
     return PettingZooEnv(BriscolaEnv())
+
 
 def watch_selfplay(args, agent):
     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
@@ -36,18 +38,19 @@ def watch_selfplay(args, agent):
 
 def get_agent(args, is_fixed=False):
     net = Net(args.state_shape, args.action_shape,
-            hidden_sizes=args.hidden_sizes, device=args.device
-            ).to(args.device)
+              hidden_sizes=args.hidden_sizes, device=args.device
+              ).to(args.device)
     optim = torch.optim.Adam(net.parameters(), lr=args.lr)
 
     if is_fixed:
-         optim = torch.optim.SGD(net.parameters(), lr=0)
+        optim = torch.optim.SGD(net.parameters(), lr=0)
     agent = DQNPolicy(
         net, optim, args.gamma, args.n_step,
         target_update_freq=args.target_update_freq)
     return agent
 
-def selfplay(args): # always train first agent, start from random policy
+
+def selfplay(args):  # always train first agent, start from random policy
     train_envs = DummyVectorEnv([env_func for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
     # seed
@@ -64,7 +67,8 @@ def selfplay(args): # always train first agent, start from random policy
 
     # initialize agents and ma-policy
     id_agent_learning = 0
-    agents = [get_agent(args) , get_agent(args, is_fixed=True) , get_agent(args, is_fixed=True), get_agent(args, is_fixed=True), get_agent(args, is_fixed=True)]
+    agents = [get_agent(args), get_agent(args, is_fixed=True), get_agent(
+        args, is_fixed=True), get_agent(args, is_fixed=True), get_agent(args, is_fixed=True)]
     policy = MultiAgentPolicyManager(agents, env)
 
     # collector
@@ -75,12 +79,13 @@ def selfplay(args): # always train first agent, start from random policy
     test_collector = Collector(policy, test_envs, exploration_noise=True)
     # policy.set_eps(1)
     train_collector.collect(n_step=args.batch_size * args.training_num)
-    
+
     # Log
     args.algo_name = "dqn"
-    log_name = os.path.join(args.algo_name, str(args.seed), "_", shortuuid.uuid()[:8])
+    log_name = os.path.join(args.algo_name, str(
+        args.seed), "_", shortuuid.uuid()[:8])
     log_path = os.path.join(args.logdir, log_name)
-    
+
     if args.logger == "wandb":
         logger = WandbLogger(
             save_interval=1,
@@ -98,7 +103,7 @@ def selfplay(args): # always train first agent, start from random policy
 
     def save_best_fn(policy):
         pass
-    
+
     def train_fn(epoch, env_step):
         for i in range(5):
             policy.policies[f'player_{i}'].set_eps(args.eps_train)
@@ -114,11 +119,11 @@ def selfplay(args): # always train first agent, start from random policy
     for i_gen in range(args.num_generation):
 
         trainer = OffpolicyTrainer(policy, train_collector, test_collector, args.epoch,
-            args.step_per_epoch, args.step_per_collect, episode_per_test=args.test_num,
-            batch_size=args.batch_size, train_fn=train_fn, test_fn=test_fn, #stop_fn=stop_fn
-            save_best_fn=save_best_fn, update_per_step=args.update_per_step,
-            logger=logger, test_in_train=False, reward_metric=reward_metric)
-        
+                                   args.step_per_epoch, args.step_per_collect, episode_per_test=args.test_num,
+                                   batch_size=args.batch_size, train_fn=train_fn, test_fn=test_fn,  # stop_fn=stop_fn
+                                   save_best_fn=save_best_fn, update_per_step=args.update_per_step,
+                                   logger=logger, test_in_train=False, reward_metric=reward_metric)
+
         previous_best = None
         for epoch, epoch_stat, info in trainer:
             if previous_best is not None:
@@ -129,48 +134,51 @@ def selfplay(args): # always train first agent, start from random policy
             # Rotate learning agent position
             old_id_agent_learning = id_agent_learning
             id_agent_learning = (id_agent_learning + 1) % 5
-            policy.replace_policy(agents[old_id_agent_learning], env.agents[id_agent_learning])
-            policy.replace_policy(agents[id_agent_learning], env.agents[old_id_agent_learning])
-           
-        
-        for i in range(0,5):
+            policy.replace_policy(
+                agents[old_id_agent_learning], env.agents[id_agent_learning])
+            policy.replace_policy(
+                agents[id_agent_learning], env.agents[old_id_agent_learning])
+
+        for i in range(0, 5):
             if i != id_agent_learning:
-                policy.policies[f'player_{i}'].load_state_dict(policy.policies[f'player_{id_agent_learning}'].state_dict()) #Copy current agent
+                policy.policies[f'player_{i}'].load_state_dict(
+                    policy.policies[f'player_{id_agent_learning}'].state_dict())  # Copy current agent
 
         print('==={} Generations Evolved==='.format(i_gen+1))
-    
-    model_save_path = os.path.join(args.logdir, 'briscola5', 'dqn', 'policy_selfplay.pth')
+
+    model_save_path = os.path.join(
+        args.logdir, 'briscola5', 'dqn', 'policy_selfplay.pth')
     torch.save(policy.policies['player_0'].state_dict(), model_save_path)
 
     return result, policy.policies['player_0']
 
 
-
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    P = 64
+    P = 10
     parser.add_argument('--seed', type=int, default=1626)
-    parser.add_argument('--eps-test', type=float, default=0.05)
-    parser.add_argument('--eps-train', type=float, default=0.1)
-    parser.add_argument('--buffer-size', type=int, default=20000)
+    parser.add_argument('--eps-test', type=float, default=0.005)
+    parser.add_argument('--eps-train', type=float, default=1.0)
+    parser.add_argument('--buffer-size', type=int, default=100000)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument(
-        '--gamma', type=float, default=0.9, help='a smaller gamma favors earlier win'
+        '--gamma', type=float, default=0.99, help='a smaller gamma favors earlier win'
     )
-    parser.add_argument('--n-step', type=int, default=5)
-    parser.add_argument('--target-update-freq', type=int, default=320)
-    parser.add_argument('--epoch', type=int, default=50)
-    parser.add_argument('--step-per-epoch', type=int, default=1000)
+    parser.add_argument('--n-step', type=int, default=3)
+    parser.add_argument('--target-update-freq', type=int, default=500)
+    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--step-per-epoch', type=int, default=100000)
     parser.add_argument('--step-per-collect', type=int, default=P)
     parser.add_argument('--update-per-step', type=float, default=0.1)
-    parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument(
         '--hidden-sizes', type=int, nargs='*', default=[128, 128, 128, 128]
     )
     parser.add_argument('--training-num', type=int, default=P)
     parser.add_argument('--num-generation', type=int, default=200)
     parser.add_argument('--test-num', type=int, default=400)
-    parser.add_argument('--logdir', type=str, default='/cluster/scratch/piattigi/FORL_briscola/')
+    parser.add_argument('--logdir', type=str,
+                        default='/cluster/scratch/piattigi/FORL_briscola/')
     parser.add_argument('--render', type=float, default=0.1)
     parser.add_argument(
         '--win-rate',
@@ -218,11 +226,10 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--wandb-project", type=str, default="briscola")
     return parser
 
+
 def get_args() -> argparse.Namespace:
     parser = get_parser()
     return parser.parse_known_args()[0]
-
-
 
 
 # train the agent and watch its performance in a match!
