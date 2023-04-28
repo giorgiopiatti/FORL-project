@@ -43,3 +43,20 @@ class BriscolaPlayerState:
 
     def __str__(self) -> str:
         return f'PlayerID {self.player_id} Role {self.role} CurrentHand {self.current_hand} Round {self.trace_round}'
+
+    def get_full_info(self):
+        result = {
+            'caller_id' : self.caller_id,
+            'caller_points_bet' : self.caller_points_bet,
+            'called_card' : self.called_card,
+            'trace' : self.trace,
+            'trace_round' : self.trace_round,
+            'points' : self.points,
+
+            'role' : self.role,
+            'player_id' : self.player_id,
+            'current_hand' : self.current_hand,
+            'other_hands' : self.other_hands,
+            'actions' : self.actions
+        }
+        return result
