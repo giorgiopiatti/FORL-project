@@ -5,27 +5,67 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "teyx",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/test.py",
-            "console": "integratedTerminal",
-            "justMyCode": false
-        },
-        {
             "name": "self_play",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/self_play.py",
             "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10"
+            ],
             "justMyCode": false
         },
         {
-            "name": "DMC",
+            "name": "caller_DQN.py",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/test_DMC.py",
+            "program": "${workspaceFolder}/caller_DQN.py",
             "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "learning caller & callee DQN joint",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_DQN.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "learning caller & callee Heuristic",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_heuristic_DQN.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10"
+            ],
             "justMyCode": false
         }
     ]

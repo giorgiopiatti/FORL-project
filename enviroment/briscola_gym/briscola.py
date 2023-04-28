@@ -171,6 +171,7 @@ class BriscolaEnv(AECEnv):
 
     def observe(self, agent):
         state = self.game.get_state(self._name_to_int(agent))
+        self.infos[agent]['raw_state'] = state
 
         legal_moves = self._get_legal_actions(state)
         action_mask = np.zeros(self.num_actions, "int8")

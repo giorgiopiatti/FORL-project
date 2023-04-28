@@ -13,7 +13,7 @@ from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
 from tianshou.data import Collector, VectorReplayBuffer
 from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy, \
     MultiAgentPolicyManager
-
+from agents.heuristic_agent import HeuristicAgent
 
 from enviroment.briscola_gym.briscola import BriscolaEnv
 from tianshou.env import PettingZooEnv
@@ -22,18 +22,18 @@ import shortuuid
 
 
 def env_func():
-    return PettingZooEnv(BriscolaEnv())
+    return PettingZooEnv(BriscolaEnv(use_role_ids=True))
 
 
-def watch_selfplay(args, agent):
-    test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
-    agent.set_eps(args.eps_test)
-    policy = MultiAgentPolicyManager([agent, *[deepcopy(agent)]*4], env_func())
-    policy.eval()
-    collector = Collector(policy, test_envs)
-    result = collector.collect(n_episode=2)
-    rews = 120*result["rews"]
-    print(f"Final reward: {rews[:, 0].mean()}")
+# def watch_selfplay(args, agent):
+#     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
+#     agent.set_eps(args.eps_test)
+#     policy = MultiAgentPolicyManager([agent, *[deepcopy(agent)]*4], env_func())
+#     policy.eval()
+#     collector = Collector(policy, test_envs)
+#     result = collector.collect(n_episode=2)
+#     rews = 120*result["rews"]
+#     print(f"Final reward: {rews[:, 0].mean()}")
 
 
 def get_agent(args, is_fixed=False):
@@ -50,6 +50,31 @@ def get_agent(args, is_fixed=False):
     return agent
 
 
+def get_random_agent(args):
+    agent = RandomPolicy(
+        observation_space=args.state_shape,
+        action_space=args.action_shape,
+    )
+    return agent
+
+
+def get_2_agents_sharing_net(args):
+    net = Net(args.state_shape, args.action_shape,
+              hidden_sizes=args.hidden_sizes, device=args.device
+              ).to(args.device)
+    optim = torch.optim.Adam(net.parameters(), lr=args.lr)
+
+    agent1 = DQNPolicy(
+        net, optim, args.gamma, args.n_step,
+        target_update_freq=args.target_update_freq)
+
+    agent2 = DQNPolicy(
+        net, optim, args.gamma, args.n_step,
+        target_update_freq=args.target_update_freq)
+
+    return agent1, agent2
+
+
 def selfplay(args):  # always train first agent, start from random policy
     train_envs = DummyVectorEnv([env_func for _ in range(args.training_num)])
     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
@@ -60,15 +85,17 @@ def selfplay(args):  # always train first agent, start from random policy
     test_envs.seed(args.seed)
 
     # Env
-    briscola = BriscolaEnv()
+    briscola = BriscolaEnv(use_role_ids=True)
     env = PettingZooEnv(briscola)
     args.state_shape = briscola.observation_space_shape
     args.action_shape = briscola.action_space_shape
 
     # initialize agents and ma-policy
     id_agent_learning = 0
-    agents = [get_agent(args), get_agent(args, is_fixed=True), get_agent(
-        args, is_fixed=True), get_agent(args, is_fixed=True), get_agent(args, is_fixed=True)]
+    agent_caller = get_agent(args)
+    agents = [agent_caller, HeuristicAgent(),
+              get_random_agent(args), get_random_agent(args), get_random_agent(args)]
+    # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
     policy = MultiAgentPolicyManager(agents, env)
 
     # collector
@@ -77,17 +104,19 @@ def selfplay(args):  # always train first agent, start from random policy
         VectorReplayBuffer(args.buffer_size, len(train_envs)),
         exploration_noise=True)
     test_collector = Collector(policy, test_envs, exploration_noise=True)
-    # policy.set_eps(1)
-    train_collector.collect(n_step=args.batch_size * args.training_num)
 
     # Log
-    args.algo_name = "dqn"
-    log_name = os.path.join(args.algo_name, str(
-        args.seed), "_", shortuuid.uuid()[:8])
+    args.algo_name = "dqn_caller_callee"
+    log_name = os.path.join(
+        args.algo_name, f'{str(args.seed)}_{shortuuid.uuid()[:8]}')
     log_path = os.path.join(args.logdir, log_name)
-
+    os.makedirs(log_path, exist_ok=True)
+    print(f'Saving results in path: {log_path}')
+    print('-----------------------------------')
     if args.logger == "wandb":
         logger = WandbLogger(
+            train_interval=1,
+            update_interval=1,
             save_interval=1,
             name=log_name.replace(os.path.sep, "__"),
             run_id=args.resume_id,
@@ -102,55 +131,32 @@ def selfplay(args):  # always train first agent, start from random policy
         logger.load(writer)
 
     def save_best_fn(policy):
-        pass
+        model_save_path = os.path.join(log_path, f'policy_best_epoch.pth')
+        torch.save(policy.policies['caller'].state_dict(), model_save_path)
 
     def train_fn(epoch, env_step):
-        for i in range(5):
-            policy.policies[f'player_{i}'].set_eps(args.eps_train)
+        if epoch <= 100:
+            policy.policies['caller'].set_eps(args.eps_train)
+        else:
+            policy.policies['caller'].set_eps(0.7)
 
     def test_fn(epoch, env_step):
-        for i in range(5):
-            policy.policies[f'player_{i}'].set_eps(args.eps_test)
+        policy.policies['caller'].set_eps(args.eps_test)
 
     def reward_metric(rews):
         return 120*rews[:, id_agent_learning]
 
-    # trainer
-    for i_gen in range(args.num_generation):
+    trainer = OffpolicyTrainer(policy, train_collector, test_collector, args.epoch,
+                               args.step_per_epoch, args.step_per_collect, episode_per_test=args.test_num,
+                               batch_size=args.batch_size, train_fn=train_fn, test_fn=test_fn,
+                               save_best_fn=save_best_fn, update_per_step=args.update_per_step,
+                               logger=logger, test_in_train=False, reward_metric=reward_metric)
+    trainer.run()
 
-        trainer = OffpolicyTrainer(policy, train_collector, test_collector, args.epoch,
-                                   args.step_per_epoch, args.step_per_collect, episode_per_test=args.test_num,
-                                   batch_size=args.batch_size, train_fn=train_fn, test_fn=test_fn,  # stop_fn=stop_fn
-                                   save_best_fn=save_best_fn, update_per_step=args.update_per_step,
-                                   logger=logger, test_in_train=False, reward_metric=reward_metric)
+    model_save_path = os.path.join(log_path, 'policy_last_epoch.pth')
+    torch.save(policy.policies['caller'].state_dict(), model_save_path)
 
-        previous_best = None
-        for epoch, epoch_stat, info in trainer:
-            if previous_best is not None:
-                if previous_best*1.05 < epoch_stat['test_reward']:
-                    break
-            previous_best = info['best_reward']
-
-            # Rotate learning agent position
-            old_id_agent_learning = id_agent_learning
-            id_agent_learning = (id_agent_learning + 1) % 5
-            policy.replace_policy(
-                agents[old_id_agent_learning], env.agents[id_agent_learning])
-            policy.replace_policy(
-                agents[id_agent_learning], env.agents[old_id_agent_learning])
-
-        for i in range(0, 5):
-            if i != id_agent_learning:
-                policy.policies[f'player_{i}'].load_state_dict(
-                    policy.policies[f'player_{id_agent_learning}'].state_dict())  # Copy current agent
-
-        print('==={} Generations Evolved==='.format(i_gen+1))
-
-    model_save_path = os.path.join(
-        args.logdir, 'briscola5', 'dqn', 'policy_selfplay.pth')
-    torch.save(policy.policies['player_0'].state_dict(), model_save_path)
-
-    return result, policy.policies['player_0']
+    return result, policy.policies['caller']
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -164,12 +170,12 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--gamma', type=float, default=1.0, help='a smaller gamma favors earlier win'
     )
-    parser.add_argument('--n-step', type=int, default=3)
+    parser.add_argument('--n-step', type=int, default=1)
     parser.add_argument('--target-update-freq', type=int, default=500)
-    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--epoch', type=int, default=200)
     parser.add_argument('--step-per-epoch', type=int, default=100000)
     parser.add_argument('--step-per-collect', type=int, default=P)
-    parser.add_argument('--update-per-step', type=float, default=0.1)
+    parser.add_argument('--update-per-step', type=float, default=1.0)
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument(
         '--hidden-sizes', type=int, nargs='*', default=[128, 128, 128, 128]
@@ -187,34 +193,6 @@ def get_parser() -> argparse.ArgumentParser:
         help='the expected winning rate: Optimal policy can get 0.7'
     )
     parser.add_argument(
-        '--watch',
-        default=False,
-        action='store_true',
-        help='no training, '
-        'watch the play of pre-trained models'
-    )
-    parser.add_argument(
-        '--agent-id',
-        type=int,
-        default=2,
-        help='the learned agent plays as the'
-        ' agent_id-th player. Choices are 1 and 2.'
-    )
-    parser.add_argument(
-        '--resume-path',
-        type=str,
-        default='',
-        help='the path of agent pth file '
-        'for resuming from a pre-trained agent'
-    )
-    parser.add_argument(
-        '--opponent-path',
-        type=str,
-        default='',
-        help='the path of opponent agent pth file '
-        'for resuming from a pre-trained agent'
-    )
-    parser.add_argument(
         '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
     )
     parser.add_argument(
@@ -223,7 +201,8 @@ def get_parser() -> argparse.ArgumentParser:
         default="tensorboard",
         choices=["tensorboard", "wandb"],
     )
-    parser.add_argument("--wandb-project", type=str, default="briscola")
+    parser.add_argument("--wandb-project", type=str, default="FORL_briscola")
+    parser.add_argument("--resume-id", type=str, default=None)
     return parser
 
 
@@ -235,4 +214,3 @@ def get_args() -> argparse.Namespace:
 # train the agent and watch its performance in a match!
 args = get_args()
 result, agent = selfplay(args)
-watch_selfplay(args, agent)
