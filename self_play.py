@@ -32,7 +32,7 @@ def watch_selfplay(args, agent):
     policy.eval()
     collector = Collector(policy, test_envs)
     result = collector.collect(n_episode=2)
-    rews = result["rews"]
+    rews = 120*result["rews"]
     print(f"Final reward: {rews[:, 0].mean()}")
 
 
@@ -113,7 +113,7 @@ def selfplay(args):  # always train first agent, start from random policy
             policy.policies[f'player_{i}'].set_eps(args.eps_test)
 
     def reward_metric(rews):
-        return rews[:, id_agent_learning]
+        return 120*rews[:, id_agent_learning]
 
     # trainer
     for i_gen in range(args.num_generation):
@@ -162,7 +162,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--buffer-size', type=int, default=100000)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument(
-        '--gamma', type=float, default=0.99, help='a smaller gamma favors earlier win'
+        '--gamma', type=float, default=1.0, help='a smaller gamma favors earlier win'
     )
     parser.add_argument('--n-step', type=int, default=3)
     parser.add_argument('--target-update-freq', type=int, default=500)
@@ -178,7 +178,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--num-generation', type=int, default=200)
     parser.add_argument('--test-num', type=int, default=400)
     parser.add_argument('--logdir', type=str,
-                        default='/cluster/scratch/piattigi/FORL_briscola/')
+                        default='log/')
     parser.add_argument('--render', type=float, default=0.1)
     parser.add_argument(
         '--win-rate',

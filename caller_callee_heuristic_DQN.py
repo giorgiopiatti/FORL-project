@@ -184,7 +184,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--num-generation', type=int, default=200)
     parser.add_argument('--test-num', type=int, default=400)
     parser.add_argument('--logdir', type=str,
-                        default='/cluster/scratch/piattigi/FORL_briscola/')
+                        default='log/')
     parser.add_argument('--render', type=float, default=0.1)
     parser.add_argument(
         '--win-rate',
