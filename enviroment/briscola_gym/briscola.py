@@ -43,13 +43,19 @@ class BriscolaEnv(AECEnv):
 
     '''
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, use_role_ids=False):
 
         self.name = 'briscola_5'
         self.game = Game()
         self.screen = None
+        self.use_role_ids = use_role_ids
         if not hasattr(self, "agents"):
-            self.agents = [f"player_{i}" for i in range(5)]
+            if self.use_role_ids:
+                self.agents = ['caller', 'callee',
+                               'good_1', 'good_2', 'good_3']
+            else:
+                self.agents = [f"player_{i}" for i in range(5)]
+
         self.possible_agents = self.agents
         self.num_actions = 40
         self.action_spaces = spaces.Dict(
@@ -104,15 +110,15 @@ class BriscolaEnv(AECEnv):
 
     @property
     def observation_space_shape(self):
-        return spaces.flatdim(self.observation_spaces['player_0']['observation'])
+        return spaces.flatdim(self.observation_spaces[self._int_to_name(0)]['observation'])
 
     @property
     def action_space_shape(self):
-        return spaces.flatdim(self.action_spaces['player_0'])
+        return spaces.flatdim(self.action_spaces[self._int_to_name(0)])
 
     @property
     def _original_observation_space(self):
-        return self.observation_spaces['player_0']['observation']
+        return self.observation_spaces[self._int_to_name(0)]['observation']
 
     def render(self):
         """
@@ -141,6 +147,8 @@ class BriscolaEnv(AECEnv):
         if seed is not None:
             self.seed(seed=seed)
         state, player_id = self.game.init_game()
+        self._construct_int_name_mappings(
+            self.game.caller_id, self.game.callee_id)
         self.agent_selection = self._int_to_name(player_id)
         self.rewards = self._convert_to_dict(
             [0 for _ in range(self.num_agents)])
@@ -261,12 +269,37 @@ class BriscolaEnv(AECEnv):
         return legal_actions
 
     def _scale_rewards(self, reward):
-        return reward
+        return reward / 120.0
+
+    def _construct_int_name_mappings(self, caller_id, callee_id):
+        ids = [0, 1, 2, 3, 4]
+
+        ids.remove(callee_id)
+        ids.remove(caller_id)
+
+        self.int_to_roles_map = {
+            caller_id: 'caller',
+            callee_id: 'callee',
+            ids[0]: 'good_1',
+            ids[1]: 'good_2',
+            ids[2]: 'good_3'
+        }
+        self.role_to_int_map = {
+            'caller': caller_id,
+            'callee': callee_id,
+            'good_1': ids[0],
+            'good_2': ids[1],
+            'good_3': ids[2]
+        }
 
     def _int_to_name(self, ind):
+        if self.use_role_ids:
+            return self.int_to_roles_map[ind]
         return self.agents[ind]
 
     def _name_to_int(self, name):
+        if self.use_role_ids:
+            return self.role_to_int_map[name]
         return self.agents.index(name)
 
     def _convert_to_dict(self, list_of_list):
