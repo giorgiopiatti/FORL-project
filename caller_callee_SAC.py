@@ -11,68 +11,67 @@ from tianshou.env import DummyVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
 from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy, \
+from tianshou.policy import BasePolicy, DQNPolicy, \
     MultiAgentPolicyManager
 
-
+from tianshou.policy import DiscreteSACPolicy
 from enviroment.briscola_gym.briscola import BriscolaEnv
 from tianshou.env import PettingZooEnv
 
 import shortuuid
-
+from agents.pg import PGPolicy
+from agents.random import RandomPolicy
+from agents.ac import Actor, Critic
 
 def env_func():
-    return PettingZooEnv(BriscolaEnv(use_role_ids=True))
+    return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False))
 
 
-# def watch_selfplay(args, agent):
-#     test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
-#     agent.set_eps(args.eps_test)
-#     policy = MultiAgentPolicyManager([agent, *[deepcopy(agent)]*4], env_func())
-#     policy.eval()
-#     collector = Collector(policy, test_envs)
-#     result = collector.collect(n_episode=2)
-#     rews = 120*result["rews"]
-#     print(f"Final reward: {rews[:, 0].mean()}")
 
 
 def get_agent(args, is_fixed=False):
-    net = Net(args.state_shape, args.action_shape,
-              hidden_sizes=args.hidden_sizes, device=args.device
-              ).to(args.device)
-    optim = torch.optim.Adam(net.parameters(), lr=args.lr)
+    net = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    actor = Actor(net, args.action_shape, softmax_output=False,
+                  device=args.device).to(args.device)
+    actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
+    net_c1 = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    critic1 = Critic(net_c1, last_size=args.action_shape,
+                     device=args.device).to(args.device)
+    critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
+    net_c2 = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    critic2 = Critic(net_c2, last_size=args.action_shape,
+                     device=args.device).to(args.device)
+    critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
+    if args.auto_alpha:
+        target_entropy = 0.98 * np.log(np.prod(args.action_shape))
+        log_alpha = torch.zeros(1, requires_grad=True, device=args.device)
+        alpha_optim = torch.optim.Adam([log_alpha], lr=args.alpha_lr)
+        args.alpha = (target_entropy, log_alpha, alpha_optim)
 
-    if is_fixed:
-        optim = torch.optim.SGD(net.parameters(), lr=0)
-    agent = DQNPolicy(
-        net, optim, args.gamma, args.n_step,
-        target_update_freq=args.target_update_freq)
-    return agent
+    policy = DiscreteSACPolicy(
+        actor,
+        actor_optim,
+        critic1,
+        critic1_optim,
+        critic2,
+        critic2_optim,
+        args.tau,
+        args.gamma,
+        args.alpha,
+        estimation_step=args.n_step,
+        reward_normalization=args.rew_norm
+    ).to(args.device)
+
+    return policy
 
 
 def get_random_agent(args):
     agent = RandomPolicy(
         observation_space=args.state_shape,
         action_space=args.action_shape,
+        device=args.device
     )
     return agent
-
-
-def get_2_agents_sharing_net(args):
-    net = Net(args.state_shape, args.action_shape,
-              hidden_sizes=args.hidden_sizes, device=args.device #TODO softmax?
-              ).to(args.device)
-    optim = torch.optim.Adam(net.parameters(), lr=args.lr)
-
-    agent1 = DQNPolicy(
-        net, optim, args.gamma, args.n_step,
-        target_update_freq=args.target_update_freq)
-
-    agent2 = DQNPolicy(
-        net, optim, args.gamma, args.n_step,
-        target_update_freq=args.target_update_freq)
-
-    return agent1, agent2
 
 
 def selfplay(args):  # always train first agent, start from random policy
@@ -92,7 +91,8 @@ def selfplay(args):  # always train first agent, start from random policy
 
     # initialize agents and ma-policy
     id_agent_learning = 0
-    agent_caller, agent_callee = get_2_agents_sharing_net(args)
+    agent_caller = get_agent(args)
+    agent_callee = get_agent(args)
     agents = [agent_caller, agent_callee,
               get_random_agent(args), get_random_agent(args), get_random_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
@@ -102,8 +102,8 @@ def selfplay(args):  # always train first agent, start from random policy
     train_collector = Collector(
         policy, train_envs,
         VectorReplayBuffer(args.buffer_size, len(train_envs)),
-        exploration_noise=True)
-    test_collector = Collector(policy, test_envs, exploration_noise=True)
+        exploration_noise=False)
+    test_collector = Collector(policy, test_envs, exploration_noise=False)
 
     # Log
     args.algo_name = "dqn_caller_callee"
@@ -134,26 +134,21 @@ def selfplay(args):  # always train first agent, start from random policy
         model_save_path = os.path.join(log_path, f'policy_best_epoch.pth')
         torch.save(policy.policies['caller'].state_dict(), model_save_path)
 
-    def train_fn(epoch, env_step):
-        if epoch <= 100:
-            policy.policies['caller'].set_eps(args.eps_train)
-            policy.policies['callee'].set_eps(args.eps_train)
-        else:
-            policy.policies['caller'].set_eps(0.7)
-            policy.policies['callee'].set_eps(0.7)
-
-    def test_fn(epoch, env_step):
-        policy.policies['caller'].set_eps(args.eps_test)
-        policy.policies['callee'].set_eps(args.eps_test)
-
     def reward_metric(rews):
-        return 120*rews[:, id_agent_learning]
+        return rews[:, id_agent_learning]
 
-    trainer = OffpolicyTrainer(policy, train_collector, test_collector, args.epoch,
-                               args.step_per_epoch, args.step_per_collect, episode_per_test=args.test_num,
-                               batch_size=args.batch_size, train_fn=train_fn, test_fn=test_fn,
-                               save_best_fn=save_best_fn, update_per_step=args.update_per_step,
-                               logger=logger, test_in_train=False, reward_metric=reward_metric)
+    trainer = OffpolicyTrainer( policy,
+        train_collector,
+        test_collector,
+        args.epoch,
+        args.step_per_epoch,
+        args.step_per_collect,
+        args.test_num,
+        args.batch_size,
+        save_best_fn=save_best_fn,
+        logger=logger,
+        update_per_step=args.update_per_step,
+        test_in_train=False)
     trainer.run()
 
     model_save_path = os.path.join(log_path, 'policy_last_epoch.pth')
@@ -164,37 +159,32 @@ def selfplay(args):  # always train first agent, start from random policy
 
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    P = 10
-    parser.add_argument('--seed', type=int, default=1626)
-    parser.add_argument('--eps-test', type=float, default=0.005)
-    parser.add_argument('--eps-train', type=float, default=1.0)
+
+    parser.add_argument('--seed', type=int, default=42)
+
     parser.add_argument('--buffer-size', type=int, default=100000)
-    parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument(
-        '--gamma', type=float, default=1.0, help='a smaller gamma favors earlier win'
-    )
-    parser.add_argument('--n-step', type=int, default=8)
-    parser.add_argument('--target-update-freq', type=int, default=0)
-    parser.add_argument('--epoch', type=int, default=200)
+    parser.add_argument('--actor-lr', type=float, default=1e-4)
+    parser.add_argument('--critic-lr', type=float, default=1e-3)
+    parser.add_argument('--alpha-lr', type=float, default=3e-4)
+    parser.add_argument('--gamma', type=float, default=0.95)
+    parser.add_argument('--tau', type=float, default=0.005)
+    parser.add_argument('--alpha', type=float, default=0.05)
+    parser.add_argument('--auto-alpha', action="store_true", default=False)
+    parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--step-per-epoch', type=int, default=100000)
-    parser.add_argument('--step-per-collect', type=int, default=P)
-    parser.add_argument('--update-per-step', type=float, default=1.0)
-    parser.add_argument('--batch-size', type=int, default=32)
-    parser.add_argument(
-        '--hidden-sizes', type=int, nargs='*', default=[128, 128, 128, 128]
-    )
-    parser.add_argument('--training-num', type=int, default=P)
+    parser.add_argument('--step-per-collect', type=int, default=10)
+    parser.add_argument('--update-per-step', type=float, default=0.1)
+    parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[128, 128, 128, 128])
+    parser.add_argument('--training-num', type=int, default=10)
+    parser.add_argument('--rew-norm', action="store_true", default=False)
+    parser.add_argument('--n-step', type=int, default=3)
+
     parser.add_argument('--num-generation', type=int, default=200)
     parser.add_argument('--test-num', type=int, default=400)
     parser.add_argument('--logdir', type=str,
                         default='log/')
     parser.add_argument('--render', type=float, default=0.1)
-    parser.add_argument(
-        '--win-rate',
-        type=int,
-        default=60,
-        help='the expected winning rate: Optimal policy can get 0.7'
-    )
     parser.add_argument(
         '--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu'
     )

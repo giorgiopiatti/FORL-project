@@ -43,11 +43,12 @@ class BriscolaEnv(AECEnv):
 
     '''
 
-    def __init__(self, render_mode=None, use_role_ids=False):
+    def __init__(self, render_mode=None, use_role_ids=False, normalize_reward=True):
 
         self.name = 'briscola_5'
         self.game = Game()
         self.screen = None
+        self.normalize_reward = normalize_reward
         self.use_role_ids = use_role_ids
         if not hasattr(self, "agents"):
             if self.use_role_ids:
@@ -270,7 +271,9 @@ class BriscolaEnv(AECEnv):
         return legal_actions
 
     def _scale_rewards(self, reward):
-        return reward / 120.0
+        if self.normalize_reward:
+            return reward / 120.0
+        return reward
 
     def _construct_int_name_mappings(self, caller_id, callee_id):
         ids = [0, 1, 2, 3, 4]

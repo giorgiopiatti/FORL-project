@@ -53,6 +53,54 @@
             "justMyCode": false
         },
         {
+            "name": "caller_callee_rainbow",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_rainbow.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "PG",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_PG.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "SAC",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_SAC.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
             "name": "learning caller & callee Heuristic",
             "type": "python",
             "request": "launch",
