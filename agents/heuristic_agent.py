@@ -112,7 +112,6 @@ class HeuristicAgent(BasePolicy):
 
             global_logits[j] = logits
 
-        print(global_logits)
         global_logits[~mask] = -np.inf
         return Batch(act=global_logits.argmax(axis=-1))
 
