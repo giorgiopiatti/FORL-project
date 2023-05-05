@@ -72,9 +72,9 @@ class BriscolaPlayer:
         for i, remain_card in enumerate(self._current_hand):
             if action.card == remain_card:
                 self._current_hand.remove(self._current_hand[i])
-                break
-        self._recorded_played_cards.append(action.card)
-        return self
+                self._recorded_played_cards.append(action.card)
+                return self
+        raise Exception("Invalid action for current state!")
 
     def __repr__(self) -> str:
         return f'Player {self.player_id}'
