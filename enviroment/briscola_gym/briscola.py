@@ -1,4 +1,5 @@
 
+from copy import deepcopy
 import numpy as np
 import functools
 
@@ -172,7 +173,11 @@ class BriscolaEnv(AECEnv):
 
     def observe(self, agent):
         state = self.game.get_state(self._name_to_int(agent))
-        self.infos[agent]['raw_state'] = state
+        self.infos[agent]['raw_state'] = deepcopy(state)
+
+        if self.game.is_over():
+                self.infos[agent]['final_state'] = {a: self._extract_state(self.game.get_state(self._name_to_int(a)))  for a in self.agents}
+
 
         legal_moves = self._get_legal_actions(state)
         action_mask = np.zeros(self.num_actions, "int8")
@@ -307,7 +312,7 @@ class BriscolaEnv(AECEnv):
         return self.agents.index(name)
 
     def _convert_to_dict(self, list_of_list):
-        return dict(zip(self.agents, list_of_list))
+        return {self._int_to_name(i):  list_of_list[i] for i in range(self.num_agents)}
 
     def seed(self, seed):
         self.game.seed(seed)
