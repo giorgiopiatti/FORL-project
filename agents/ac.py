@@ -71,7 +71,8 @@ class Actor(nn.Module):
         # NOTE changed here
         # mask: np.array with shape=(bsz, n_act), dtype=bool, True means available
         # logits: torch.Tensor with shape=(bsz, n_act), dtype=torch.float, range=0~1
-        logits = logits * to_torch_as(obs.mask, logits)
+        mask = to_torch_as(obs.mask, logits).to(torch.bool)
+        logits[~mask] = -torch.inf
         if self.softmax_output:
             logits = F.softmax(logits, dim=-1)
         return logits, hidden

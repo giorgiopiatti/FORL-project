@@ -1,3 +1,4 @@
+from copy import deepcopy
 import time
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -18,8 +19,10 @@ from tianshou.data.batch import _alloc_by_keys_diff
 from tianshou.env import BaseVectorEnv, DummyVectorEnv
 from tianshou.policy import BasePolicy
 
+from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 
-class Collector(object):
+
+class MultiAgentCollector(object):
     """Collector enables the policy to interact with different types of envs with \
     exact number of steps or episodes.
 
@@ -59,9 +62,10 @@ class Collector(object):
         self,
         policy: BasePolicy,
         env: Union[gym.Env, BaseVectorEnv],
+        agents,
         buffer: Optional[ReplayBuffer] = None,
         preprocess_fn: Optional[Callable[..., Batch]] = None,
-        exploration_noise: bool = False,
+        exploration_noise: bool = False
     ) -> None:
         super().__init__()
         if isinstance(env, gym.Env) and not hasattr(env, "__len__"):
@@ -72,7 +76,8 @@ class Collector(object):
             self.env = env  # type: ignore
         self.env_num = len(self.env)
         self.exploration_noise = exploration_noise
-        self._assign_buffer(buffer)
+        self.agents_ids =  agents
+        self.buffer = {agent : self._assign_buffer(buffer) for agent in self.agents_ids}
         self.policy = policy
         self.preprocess_fn = preprocess_fn
         self._action_space = self.env.action_space
@@ -82,26 +87,17 @@ class Collector(object):
     def _assign_buffer(self, buffer: Optional[ReplayBuffer]) -> None:
         """Check if the buffer matches the constraint."""
         if buffer is None:
-            buffer = VectorReplayBuffer(self.env_num, self.env_num)
-        elif isinstance(buffer, ReplayBufferManager):
+            buffer = MultiAgentVectorReplayBuffer(self.env_num, self.env_num)
+        if isinstance(buffer, MultiAgentVectorReplayBuffer):
             assert buffer.buffer_num >= self.env_num
-            if isinstance(buffer, CachedReplayBuffer):
-                assert buffer.cached_buffer_num >= self.env_num
         else:  # ReplayBuffer or PrioritizedReplayBuffer
             assert buffer.maxsize > 0
-            if self.env_num > 1:
-                if type(buffer) == ReplayBuffer:
-                    buffer_type = "ReplayBuffer"
-                    vector_type = "VectorReplayBuffer"
-                else:
-                    buffer_type = "PrioritizedReplayBuffer"
-                    vector_type = "PrioritizedVectorReplayBuffer"
-                raise TypeError(
-                    f"Cannot use {buffer_type}(size={buffer.maxsize}, ...) to collect "
-                    f"{self.env_num} envs,\n\tplease use {vector_type}(total_size="
+            raise TypeError(
+                    f"Cannot use {type(buffer)}(size={buffer.maxsize}, ...) to collect "
+                    f"{self.env_num} envs,\n\tplease use MultiAgentVectorReplayBuffer(total_size="
                     f"{buffer.maxsize}, buffer_num={self.env_num}, ...) instead."
                 )
-        self.buffer = buffer
+        return deepcopy(buffer)
 
     def reset(
         self,
@@ -139,7 +135,8 @@ class Collector(object):
 
     def reset_buffer(self, keep_statistics: bool = False) -> None:
         """Reset the data buffer."""
-        self.buffer.reset(keep_statistics=keep_statistics)
+        for (_, buffer) in self.buffer.items():
+            buffer.reset(keep_statistics=keep_statistics)
 
     def reset_env(self, gym_reset_kwargs: Optional[Dict[str, Any]] = None) -> None:
         """Reset all of the environments."""
@@ -227,25 +224,14 @@ class Collector(object):
             * ``len_std`` standard error of episodic lengths.
         """
         assert not self.env.is_async, "Please use AsyncCollector if using async venv."
-        if n_step is not None:
-            assert n_episode is None, (
-                f"Only one of n_step or n_episode is allowed in Collector."
-                f"collect, got n_step={n_step}, n_episode={n_episode}."
-            )
-            assert n_step > 0
-            if not n_step % self.env_num == 0:
-                warnings.warn(
-                    f"n_step={n_step} is not a multiple of #env ({self.env_num}), "
-                    "which may cause extra transitions collected into the buffer."
-                )
-            ready_env_ids = np.arange(self.env_num)
-        elif n_episode is not None:
+        if n_episode is not None:
             assert n_episode > 0
             ready_env_ids = np.arange(min(self.env_num, n_episode))
             self.data = self.data[:min(self.env_num, n_episode)]
+            n_step = None
         else:
             raise TypeError(
-                "Please specify at least one (either n_step or n_episode) "
+                "Please specify n_episode "
                 "in AsyncCollector.collect()."
             )
 
@@ -253,10 +239,11 @@ class Collector(object):
 
         step_count = 0
         episode_count = 0
-        episode_rews = []
+        episode_rews = [] # {agent : [] for agent in self.agents_ids}
         episode_lens = []
-        episode_start_indices = []
+        episode_start_indices = {agent : [] for agent in self.agents_ids}
 
+        episode_len_agent = 8
         while True:
             assert len(self.data) == len(ready_env_ids)
             # restore the state: if the last state is None, it won't store
@@ -326,22 +313,37 @@ class Collector(object):
                 self.env.render()
                 if render > 0 and not np.isclose(render, 0):
                     time.sleep(render)
-
-            # add data into the buffer
-            ptr, ep_rew, ep_len, ep_idx = self.buffer.add(
-                self.data, buffer_ids=ready_env_ids
-            )
+            
+            # NOTE save each observation in each agent replay buffer
+            for agent in self.agents_ids:
+                mask_agent = self.data.obs.agent_id == agent
+                env_ids_agent = self.data.info.env_id[mask_agent]
+                 # add data into the buffer
+                if len(env_ids_agent) > 0:
+                    self.buffer[agent].add(self.data[mask_agent], env_ids_agent)
 
             # collect statistics
             step_count += len(ready_env_ids)
 
             if np.any(done):
+                for agent in self.agents_ids:
+                    self.buffer[agent].update_obs_next_end_episode(
+                        Batch(
+                        {
+                            'agent_id': np.array([agent for _ in ready_env_ids]),
+                            'obs':  [self.data.info.final_state[agent]],
+                            'mask': np.ones_like(self.data.obs.mask, dtype=np.bool_) # NOTE placeholder to prevent crashing during Q target estimation for policy
+                        }),
+                        self.data.rew,
+                        ready_env_ids
+                    )
+                
                 env_ind_local = np.where(done)[0]
                 env_ind_global = ready_env_ids[env_ind_local]
                 episode_count += len(env_ind_local)
-                episode_lens.append(ep_len[env_ind_local])
-                episode_rews.append(ep_rew[env_ind_local])
-                episode_start_indices.append(ep_idx[env_ind_local])
+                episode_lens.append(np.full_like(env_ind_local, fill_value=8)) # NOTE one episode has always length 8
+                episode_rews.append(self.data.rew)
+                # episode_start_indices.append(ep_idx)
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
                 self._reset_env_with_ids(
@@ -387,17 +389,16 @@ class Collector(object):
             self.reset_env()
 
         if episode_count > 0:
-            rews, lens, idxs = list(
+            rews, lens = list(
                 map(
                     np.concatenate,
-                    [episode_rews, episode_lens, episode_start_indices]
+                    [episode_rews, episode_lens]
                 )
             )
-            rew_mean, rew_std = rews.mean(), rews.std()
+            rew_mean, rew_std = rews.mean(axis=0), rews.std(axis=0)
             len_mean, len_std = lens.mean(), lens.std()
         else:
-            rews, lens, idxs = np.array([]), np.array(
-                [], int), np.array([], int)
+            rews, lens = np.array([]), np.array([], int)
             rew_mean = rew_std = len_mean = len_std = 0
 
         return {
@@ -405,9 +406,9 @@ class Collector(object):
             "n/st": step_count,
             "rews": rews,
             "lens": lens,
-            "idxs": idxs,
-            "rew": rew_mean,
+            #"idxs": idxs,
+            "rew": rew_mean[0], # Convention return reward of caller team
             "len": len_mean,
-            "rew_std": rew_std,
+            "rew_std": rew_std[0], # Convention return reward of caller team
             "len_std": len_std,
         }

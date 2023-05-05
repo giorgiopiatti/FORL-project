@@ -10,9 +10,8 @@ from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.env import DummyVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
-from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.policy import BasePolicy, DQNPolicy, \
-    MultiAgentPolicyManager
+from tianshou.data import  ReplayBuffer
+from tianshou.policy import BasePolicy, DQNPolicy
 
 from tianshou.policy import DiscreteSACPolicy
 from enviroment.briscola_gym.briscola import BriscolaEnv
@@ -22,23 +21,27 @@ import shortuuid
 from agents.pg import PGPolicy
 from agents.random import RandomPolicy
 from agents.ac import Actor, Critic
+from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
+from multi_agents_rl.collector import MultiAgentCollector
+from multi_agents_rl.mapolicy import MultiAgentPolicyManager
 
 def env_func():
     return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False))
 
 
-
-
 def get_agent(args, is_fixed=False):
-    net = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    net = Net(args.state_shape, hidden_sizes=args.hidden_sizes,
+              device=args.device)
     actor = Actor(net, args.action_shape, softmax_output=False,
                   device=args.device).to(args.device)
     actor_optim = torch.optim.Adam(actor.parameters(), lr=args.actor_lr)
-    net_c1 = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    net_c1 = Net(args.state_shape, hidden_sizes=args.hidden_sizes,
+                 device=args.device)
     critic1 = Critic(net_c1, last_size=args.action_shape,
                      device=args.device).to(args.device)
     critic1_optim = torch.optim.Adam(critic1.parameters(), lr=args.critic_lr)
-    net_c2 = Net(args.state_shape, hidden_sizes=args.hidden_sizes, device=args.device)
+    net_c2 = Net(args.state_shape, hidden_sizes=args.hidden_sizes,
+                 device=args.device)
     critic2 = Critic(net_c2, last_size=args.action_shape,
                      device=args.device).to(args.device)
     critic2_optim = torch.optim.Adam(critic2.parameters(), lr=args.critic_lr)
@@ -96,14 +99,15 @@ def selfplay(args):  # always train first agent, start from random policy
     agents = [agent_caller, agent_callee,
               get_random_agent(args), get_random_agent(args), get_random_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
-    policy = MultiAgentPolicyManager(agents, env)
+    LERNING_AGENTS_ID = ['caller', 'callee']
+    policy = MultiAgentPolicyManager(agents, env, LERNING_AGENTS_ID)
 
     # collector
-    train_collector = Collector(
-        policy, train_envs,
-        VectorReplayBuffer(args.buffer_size, len(train_envs)),
+    train_collector = MultiAgentCollector(
+        policy, train_envs, LERNING_AGENTS_ID,
+        MultiAgentVectorReplayBuffer(args.buffer_size, len(train_envs)),
         exploration_noise=False)
-    test_collector = Collector(policy, test_envs, exploration_noise=False)
+    test_collector = MultiAgentCollector(policy, test_envs, LERNING_AGENTS_ID, exploration_noise=False)
 
     # Log
     args.algo_name = "dqn_caller_callee"
@@ -137,24 +141,25 @@ def selfplay(args):  # always train first agent, start from random policy
     def reward_metric(rews):
         return rews[:, id_agent_learning]
 
-    trainer = OffpolicyTrainer( policy,
-        train_collector,
-        test_collector,
-        args.epoch,
-        args.step_per_epoch,
-        args.step_per_collect,
-        args.test_num,
-        args.batch_size,
-        save_best_fn=save_best_fn,
-        logger=logger,
-        update_per_step=args.update_per_step,
-        test_in_train=False)
+    trainer = OffpolicyTrainer(policy,
+                               train_collector,
+                               test_collector,
+                               max_epoch=args.epoch,
+                               step_per_epoch=args.step_per_epoch,
+                               step_per_collect=0, # NOTE this is keep but ignore by our collector
+                               episode_per_collect=args.episode_per_collect,
+                               episode_per_test=args.test_num,
+                               batch_size=args.batch_size,
+                               save_best_fn=save_best_fn,
+                               logger=logger,
+                               update_per_step=args.update_per_step,
+                               test_in_train=False)
     trainer.run()
 
     model_save_path = os.path.join(log_path, 'policy_last_epoch.pth')
     torch.save(policy.policies['caller'].state_dict(), model_save_path)
 
-    return result, policy.policies['caller']
+    #return result, policy.policies['caller']
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -170,15 +175,17 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--tau', type=float, default=0.005)
     parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--auto-alpha', action="store_true", default=False)
-    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--epoch', type=int, default=2)
     parser.add_argument('--step-per-epoch', type=int, default=100000)
-    parser.add_argument('--step-per-collect', type=int, default=10)
-    parser.add_argument('--update-per-step', type=float, default=0.1)
-    parser.add_argument('--batch-size', type=int, default=64)
-    parser.add_argument('--hidden-sizes', type=int, nargs='*', default=[128, 128, 128, 128])
-    parser.add_argument('--training-num', type=int, default=10)
+    parser.add_argument('--episode-per-collect', type=int, default=10)
+    parser.add_argument('--update-per-step', type=float,
+                        default=1.0)  # NOTE before 0.1
+    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--hidden-sizes', type=int,
+                        nargs='*', default=[128, 128, 128, 128])
+    parser.add_argument('--training-num', type=int, default=2)
     parser.add_argument('--rew-norm', action="store_true", default=False)
-    parser.add_argument('--n-step', type=int, default=3)
+    parser.add_argument('--n-step', type=int, default=1)
 
     parser.add_argument('--num-generation', type=int, default=200)
     parser.add_argument('--test-num', type=int, default=400)

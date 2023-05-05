@@ -22,13 +22,13 @@ class MultiAgentPolicyManager(BasePolicy):
     """
 
     def __init__(
-        self, policies: List[BasePolicy], env: PettingZooEnv, **kwargs: Any
+        self, policies: List[BasePolicy], env: PettingZooEnv, learning_policies: List[str], **kwargs: Any
     ) -> None:
         super().__init__(action_space=env.action_space, **kwargs)
         assert (
             len(policies) == len(env.agents)
         ), "One policy must be assigned for each agent."
-
+        self.learning_policies = learning_policies
         self.agent_idx = env.agent_idx
         for i, policy in enumerate(policies):
             # agent_id 0 is reserved for the environment proxy
@@ -188,11 +188,41 @@ class MultiAgentPolicyManager(BasePolicy):
                 "agent_n/xxx": xxx
             }
         """
+        raise NotImplementedError()
+
+    def update(self, sample_size: int, buffer: Optional[ReplayBuffer],
+               **kwargs: Any) -> Dict[str, Any]:
+        """Update the policy network and replay buffer.
+
+        It includes 3 function steps: process_fn, learn, and post_process_fn. In
+        addition, this function will change the value of ``self.updating``: it will be
+        False before this function and will be True when executing :meth:`update`.
+        Please refer to :ref:`policy_state` for more detailed explanation.
+
+        :param int sample_size: 0 means it will extract all the data from the buffer,
+            otherwise it will sample a batch with given sample_size.
+        :param ReplayBuffer buffer: the corresponding replay buffer.
+
+        :return: A dict, including the data needed to be logged (e.g., loss) from
+            ``policy.learn()``.
+        """
+        if buffer is None:
+            return {}
+        self.updating = True
+
         results = {}
         for agent_id, policy in self.policies.items():
+            if agent_id not in self.learning_policies:
+                continue
+            batch, indices = buffer[agent_id].sample(sample_size)
+            batch = self.process_fn(batch, buffer[agent_id], indices)
             data = batch[agent_id]
             if not data.is_empty():
                 out = policy.learn(batch=data, **kwargs)
                 for k, v in out.items():
                     results[agent_id + "/" + k] = v
+            self.post_process_fn(batch, buffer[agent_id], indices)
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
+        self.updating = False
         return results
