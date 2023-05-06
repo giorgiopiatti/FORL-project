@@ -1,13 +1,15 @@
 from typing import Any, Dict, Optional, Union
+import gymnasium as gym
 
 import numpy as np
 
 from tianshou.data import Batch
 from tianshou.policy import BasePolicy
+from tianshou.utils import MultipleLRSchedulers
 from enviroment.briscola_gym.actions import PLAY_ACTION_STR_TO_ID 
 from enviroment.briscola_gym.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
 from enviroment.briscola_gym.card import Card
-
+import torch 
 def wins(card1, card2, briscola_suit):
         winner_card = card1
         prev_card = card2
@@ -20,6 +22,10 @@ def wins(card1, card2, briscola_suit):
         return winner_card
 
 class HeuristicAgent(BasePolicy):
+
+    def __init__(self, device, observation_space = None, action_space = None, action_scaling: bool = False, action_bound_method: str = "", lr_scheduler = None) -> None:
+        self.device = device
+        super().__init__(observation_space, action_space, action_scaling, action_bound_method, lr_scheduler)
     """A random agent used in multi-agent learning.
 
     It randomly chooses an action from the legal action.
@@ -31,11 +37,11 @@ class HeuristicAgent(BasePolicy):
         state: Optional[Union[dict, Batch, np.ndarray]] = None,
         **kwargs: Any,
     ) -> Batch:
-        global_logits = np.zeros((len(batch), 40))
+        global_logits = torch.zeros((len(batch), 40), device=self.device)
 
         raw_states = batch.info['raw_state']  # List of state pro env
         for j, raw_state in enumerate(raw_states):
-            logits = np.zeros(40)
+            logits = torch.zeros(40, device=self.device)
             briscola_suit = raw_state.called_card.suit
             mask = batch.obs.mask
             caller_id = raw_state.caller_id
@@ -112,7 +118,8 @@ class HeuristicAgent(BasePolicy):
 
             global_logits[j] = logits
 
-        global_logits[~mask] = -np.inf
+        mask = torch.tensor(mask, device=self.device)
+        global_logits = global_logits.masked_fill(~mask, -torch.inf)
         return Batch(act=global_logits.argmax(axis=-1))
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:
