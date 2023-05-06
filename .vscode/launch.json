@@ -44,9 +44,9 @@
             "console": "integratedTerminal",
             "args": [
                 "--test-num",
-                "10",
+                "1",
                 "--training-num",
-                "10",
+                "1",
                 "--step-per-epoch",
                 "10"
             ],
@@ -96,6 +96,8 @@
                 "--training-num",
                 "10",
                 "--step-per-epoch",
+                "2000",
+                "--episode-per-collect",
                 "10"
             ],
             "justMyCode": false
@@ -112,6 +114,8 @@
                 "--training-num",
                 "10",
                 "--step-per-epoch",
+                "10",
+                "--episode-per-collect",
                 "10"
             ],
             "justMyCode": false
