@@ -21,7 +21,6 @@ from tianshou.policy import BasePolicy
 
 from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 
-
 class MultiAgentCollector(object):
     """Collector enables the policy to interact with different types of envs with \
     exact number of steps or episodes.
@@ -76,13 +75,16 @@ class MultiAgentCollector(object):
             self.env = env  # type: ignore
         self.env_num = len(self.env)
         self.exploration_noise = exploration_noise
-        self.agents_ids =  agents
-        self.buffer = {agent : self._assign_buffer(buffer) for agent in self.agents_ids}
+        self.agents_ids = agents
+        self.buffer = {agent: self._assign_buffer(
+            buffer) for agent in self.agents_ids}
         self.policy = policy
         self.preprocess_fn = preprocess_fn
         self._action_space = self.env.action_space
         # avoid creating attribute outside __init__
         self.reset(False)
+
+ 
 
     def _assign_buffer(self, buffer: Optional[ReplayBuffer]) -> None:
         """Check if the buffer matches the constraint."""
@@ -93,10 +95,10 @@ class MultiAgentCollector(object):
         else:  # ReplayBuffer or PrioritizedReplayBuffer
             assert buffer.maxsize > 0
             raise TypeError(
-                    f"Cannot use {type(buffer)}(size={buffer.maxsize}, ...) to collect "
-                    f"{self.env_num} envs,\n\tplease use MultiAgentVectorReplayBuffer(total_size="
-                    f"{buffer.maxsize}, buffer_num={self.env_num}, ...) instead."
-                )
+                f"Cannot use {type(buffer)}(size={buffer.maxsize}, ...) to collect "
+                f"{self.env_num} envs,\n\tplease use MultiAgentVectorReplayBuffer(total_size="
+                f"{buffer.maxsize}, buffer_num={self.env_num}, ...) instead."
+            )
         return deepcopy(buffer)
 
     def reset(
@@ -228,6 +230,7 @@ class MultiAgentCollector(object):
             assert n_episode > 0
             ready_env_ids = np.arange(min(self.env_num, n_episode))
             self.data = self.data[:min(self.env_num, n_episode)]
+            # self.data.obs.obs.to_torch(device='cuda')
             n_step = None
         else:
             raise TypeError(
@@ -239,9 +242,9 @@ class MultiAgentCollector(object):
 
         step_count = 0
         episode_count = 0
-        episode_rews = [] # {agent : [] for agent in self.agents_ids}
+        episode_rews = []  # {agent : [] for agent in self.agents_ids}
         episode_lens = []
-        episode_start_indices = {agent : [] for agent in self.agents_ids}
+        episode_start_indices = {agent: [] for agent in self.agents_ids}
 
         episode_len_agent = 8
         while True:
@@ -313,35 +316,38 @@ class MultiAgentCollector(object):
                 self.env.render()
                 if render > 0 and not np.isclose(render, 0):
                     time.sleep(render)
-            
+
             # NOTE save each observation in each agent replay buffer
             for agent in self.agents_ids:
                 mask_agent = self.data.obs.agent_id == agent
                 env_ids_agent = self.data.info.env_id[mask_agent]
-                 # add data into the buffer
+                # add data into the buffer
                 if len(env_ids_agent) > 0:
-                    self.buffer[agent].add(self.data[mask_agent], env_ids_agent)
+                    self.buffer[agent].add(
+                        self.data[mask_agent], env_ids_agent)
 
             # collect statistics
-            step_count += len(ready_env_ids)
 
             if np.any(done):
                 for agent in self.agents_ids:
                     self.buffer[agent].update_obs_next_end_episode(
                         Batch(
-                        {
-                            'agent_id': np.array([agent for _ in ready_env_ids]),
-                            'obs':  [self.data.info.final_state[agent]],
-                            'mask': np.ones_like(self.data.obs.mask, dtype=np.bool_) # NOTE placeholder to prevent crashing during Q target estimation for policy
-                        }),
+                            {
+                                'agent_id': np.array([agent for _ in ready_env_ids]),
+                                'obs':  [self.data.info.final_state[agent]],
+                                # NOTE placeholder to prevent crashing during Q target estimation for policy
+                                'mask': np.ones_like(self.data.obs.mask, dtype=np.bool_)
+                            }),
                         self.data.rew,
                         ready_env_ids
                     )
-                
+
                 env_ind_local = np.where(done)[0]
                 env_ind_global = ready_env_ids[env_ind_local]
                 episode_count += len(env_ind_local)
-                episode_lens.append(np.full_like(env_ind_local, fill_value=8)) # NOTE one episode has always length 8
+                # NOTE one episode has always length 8
+                step_count += 8*done.sum()
+                episode_lens.append(np.full_like(env_ind_local, fill_value=8))
                 episode_rews.append(self.data.rew)
                 # episode_start_indices.append(ep_idx)
                 # now we copy obs_next to obs, but since there might be
@@ -406,9 +412,9 @@ class MultiAgentCollector(object):
             "n/st": step_count,
             "rews": rews,
             "lens": lens,
-            #"idxs": idxs,
-            "rew": rew_mean[0], # Convention return reward of caller team
+            # "idxs": idxs,
+            "rew": rew_mean[0],  # Convention return reward of caller team
             "len": len_mean,
-            "rew_std": rew_std[0], # Convention return reward of caller team
+            "rew_std": rew_std[0],  # Convention return reward of caller team
             "len_std": len_std,
         }
