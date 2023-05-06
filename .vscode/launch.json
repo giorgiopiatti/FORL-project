@@ -119,6 +119,24 @@
                 "10"
             ],
             "justMyCode": false
+        },
+        {
+            "name": "learning caller & callee Heuristic SAC",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_heuristic_SAC.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10",
+                "--episode-per-collect",
+                "10"
+            ],
+            "justMyCode": false
         }
     ]
 }
