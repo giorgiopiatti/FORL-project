@@ -10,7 +10,7 @@ from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.env import DummyVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
-from tianshou.data import  ReplayBuffer
+from tianshou.data import ReplayBuffer
 from tianshou.policy import BasePolicy, DQNPolicy
 
 from tianshou.policy import DiscreteSACPolicy
@@ -24,6 +24,7 @@ from agents.ac import Actor, Critic
 from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 from multi_agents_rl.collector import MultiAgentCollector
 from multi_agents_rl.mapolicy import MultiAgentPolicyManager
+
 
 def env_func():
     return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False))
@@ -87,7 +88,7 @@ def selfplay(args):  # always train first agent, start from random policy
     test_envs.seed(args.seed)
 
     # Env
-    briscola = BriscolaEnv(use_role_ids=True)
+    briscola = BriscolaEnv(use_role_ids=True, normalize_reward=False)
     env = PettingZooEnv(briscola)
     args.state_shape = briscola.observation_space_shape
     args.action_shape = briscola.action_space_shape
@@ -102,15 +103,17 @@ def selfplay(args):  # always train first agent, start from random policy
     LERNING_AGENTS_ID = ['caller', 'callee']
     policy = MultiAgentPolicyManager(agents, env, LERNING_AGENTS_ID)
 
+    
     # collector
     train_collector = MultiAgentCollector(
         policy, train_envs, LERNING_AGENTS_ID,
         MultiAgentVectorReplayBuffer(args.buffer_size, len(train_envs)),
         exploration_noise=False)
-    test_collector = MultiAgentCollector(policy, test_envs, LERNING_AGENTS_ID, exploration_noise=False)
+    test_collector = MultiAgentCollector(
+        policy, test_envs, LERNING_AGENTS_ID, exploration_noise=False)
 
     # Log
-    args.algo_name = "dqn_caller_callee"
+    args.algo_name = "SAC_caller_callee_vs_random"
     log_name = os.path.join(
         args.algo_name, f'{str(args.seed)}_{shortuuid.uuid()[:8]}')
     log_path = os.path.join(args.logdir, log_name)
@@ -135,8 +138,10 @@ def selfplay(args):  # always train first agent, start from random policy
         logger.load(writer)
 
     def save_best_fn(policy):
-        model_save_path = os.path.join(log_path, f'policy_best_epoch.pth')
+        model_save_path = os.path.join(log_path, f'caller_policy_best_epoch.pth')
         torch.save(policy.policies['caller'].state_dict(), model_save_path)
+        model_save_path = os.path.join(log_path, f'callee_policy_best_epoch.pth')
+        torch.save(policy.policies['callee'].state_dict(), model_save_path)
 
     def reward_metric(rews):
         return rews[:, id_agent_learning]
@@ -146,7 +151,7 @@ def selfplay(args):  # always train first agent, start from random policy
                                test_collector,
                                max_epoch=args.epoch,
                                step_per_epoch=args.step_per_epoch,
-                               step_per_collect=0, # NOTE this is keep but ignore by our collector
+                               step_per_collect=0,  # NOTE this is keep but ignore by our collector
                                episode_per_collect=args.episode_per_collect,
                                episode_per_test=args.test_num,
                                batch_size=args.batch_size,
@@ -156,10 +161,12 @@ def selfplay(args):  # always train first agent, start from random policy
                                test_in_train=False)
     trainer.run()
 
-    model_save_path = os.path.join(log_path, 'policy_last_epoch.pth')
+    model_save_path = os.path.join(log_path, 'caller_policy_last_epoch.pth')
     torch.save(policy.policies['caller'].state_dict(), model_save_path)
+    model_save_path = os.path.join(log_path, 'callee_policy_last_epoch.pth')
+    torch.save(policy.policies['callee'].state_dict(), model_save_path)
 
-    #return result, policy.policies['caller']
+    # return result, policy.policies['caller']
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -167,7 +174,7 @@ def get_parser() -> argparse.ArgumentParser:
 
     parser.add_argument('--seed', type=int, default=42)
 
-    parser.add_argument('--buffer-size', type=int, default=100000)
+    parser.add_argument('--buffer-size', type=int, default=2*8*1000)
     parser.add_argument('--actor-lr', type=float, default=1e-4)
     parser.add_argument('--critic-lr', type=float, default=1e-3)
     parser.add_argument('--alpha-lr', type=float, default=3e-4)
@@ -175,15 +182,15 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--tau', type=float, default=0.005)
     parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--auto-alpha', action="store_true", default=False)
-    parser.add_argument('--epoch', type=int, default=2)
-    parser.add_argument('--step-per-epoch', type=int, default=100000)
-    parser.add_argument('--episode-per-collect', type=int, default=10)
+    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--step-per-epoch', type=int, default=2*8*1000)
+    parser.add_argument('--episode-per-collect', type=int, default=1000)
     parser.add_argument('--update-per-step', type=float,
                         default=1.0)  # NOTE before 0.1
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--hidden-sizes', type=int,
                         nargs='*', default=[128, 128, 128, 128])
-    parser.add_argument('--training-num', type=int, default=2)
+    parser.add_argument('--training-num', type=int, default=1000)
     parser.add_argument('--rew-norm', action="store_true", default=False)
     parser.add_argument('--n-step', type=int, default=1)
 
@@ -213,4 +220,4 @@ def get_args() -> argparse.Namespace:
 
 # train the agent and watch its performance in a match!
 args = get_args()
-result, agent = selfplay(args)
+selfplay(args)

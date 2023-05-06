@@ -44,13 +44,15 @@ class BriscolaEnv(AECEnv):
 
     '''
 
-    def __init__(self, render_mode=None, use_role_ids=False, normalize_reward=True):
+    def __init__(self, render_mode=None, use_role_ids=False, normalize_reward=True, save_raw_state = False, heuristic_ids = []):
 
         self.name = 'briscola_5'
         self.game = Game()
         self.screen = None
         self.normalize_reward = normalize_reward
         self.use_role_ids = use_role_ids
+        self.save_raw_state = save_raw_state
+        self.heuristic_ids = heuristic_ids
         if not hasattr(self, "agents"):
             if self.use_role_ids:
                 self.agents = ['caller', 'callee',
@@ -173,7 +175,8 @@ class BriscolaEnv(AECEnv):
 
     def observe(self, agent):
         state = self.game.get_state(self._name_to_int(agent))
-        self.infos[agent]['raw_state'] = deepcopy(state)
+        if self.save_raw_state and agent in self.heuristic_ids:
+            self.infos[agent]['raw_state'] = deepcopy(state)
 
         if self.game.is_over():
                 self.infos[agent]['final_state'] = {a: self._extract_state(self.game.get_state(self._name_to_int(a)))  for a in self.agents}
