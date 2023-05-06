@@ -70,10 +70,10 @@ class MultiAgentVectorReplayBuffer(ReplayBufferManager):
         buffer_ids: Optional[Union[np.ndarray, List[int]]] = None
         ):
 
-        last_index = np.concatenate([
-                [(buf._index - 1) % buf._size + offset]
-                for offset, buf in zip(self._offset, self.buffers)
-            ])
+        last_index = []
+        for i in buffer_ids:
+            last_index.append([(self.buffers[i]._index - 1) % self.buffers[i]._size + self._offset[i]])
+        last_index = np.concatenate(last_index)
         
         self._meta.obs_next[last_index] = batch
         self._meta.terminated[last_index] = np.ones_like(last_index, dtype=np.bool_)
