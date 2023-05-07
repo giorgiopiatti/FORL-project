@@ -179,9 +179,9 @@ class HeuristicAgent(BasePolicy):
                     for rank in rank_list:
                         card = rank + suit
                         if suit == briscola_suit:
-                            w, _ = wins(winner_card, Card(current_suit, rank), winner_index, raw_state.player_id, suit)
+                            w, _ = wins(winner_card, Card(suit, rank), winner_index, raw_state.player_id, suit)
 
-                            if w == Card(current_suit, rank):
+                            if w == Card(suit, rank):
                                 logits[PLAY_ACTION_STR_TO_ID[card]] += 30
                                 if is_last:
                                     logits[PLAY_ACTION_STR_TO_ID[card]] += 11 - CARD_POINTS[rank] #take with smallest briscola if last
@@ -192,6 +192,7 @@ class HeuristicAgent(BasePolicy):
             if points_in_round <= 6:
                 for rank in rank_list:
                         for suit in suit_list:
+                            card = rank + suit
                             if caller_played: logits[PLAY_ACTION_STR_TO_ID[card]] += CARD_POINTS[rank]
                             else: logits[PLAY_ACTION_STR_TO_ID[card]] -= CARD_POINTS[rank]
 
