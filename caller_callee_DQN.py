@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.utils import TensorboardLogger, WandbLogger
-from tianshou.env import DummyVectorEnv
+from tianshou.env import SubprocVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
 from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy
@@ -67,8 +67,8 @@ def get_2_agents_sharing_net(args):
 
 
 def selfplay(args):  # always train first agent, start from random policy
-    train_envs = DummyVectorEnv([env_func for _ in range(args.training_num)])
-    test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
+    train_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
+    test_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -175,7 +175,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--episode-per-collect', type=int, default=1000)
     parser.add_argument('--update-per-step', type=float, default=1.0)
     parser.add_argument('--batch-size', type=int, default=32)
-    parser.add_argument('--training-num', type=int, default=1000)
+    parser.add_argument('--num-parallel-env', type=int, default=16)
     parser.add_argument('--test-num', type=int, default=400)
     parser.add_argument('--seed', type=int, default=42)
 

@@ -7,10 +7,10 @@ from typing import Optional, Tuple
 from torch.utils.tensorboard import SummaryWriter
 
 from tianshou.utils import TensorboardLogger, WandbLogger
-from tianshou.env import DummyVectorEnv
+from tianshou.env import SubprocVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
-from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy
+from tianshou.policy import BasePolicy, DQNPolicy
 from agents.heuristic_agent import HeuristicAgent
 
 
@@ -22,7 +22,7 @@ from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 
 from multi_agents_rl.collector import MultiAgentCollector
 from multi_agents_rl.mapolicy import MultiAgentPolicyManager
-
+from agents.random import RandomPolicy
 
 def env_func():
     return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True, heuristic_ids=['callee']))
@@ -44,6 +44,7 @@ def get_agent(args, is_fixed=False):
 
 def get_random_agent(args):
     agent = RandomPolicy(
+        device='cpu',
         observation_space=args.state_shape,
         action_space=args.action_shape,
     )
@@ -52,7 +53,7 @@ def get_random_agent(args):
 
 def get_heuristic_agent(args):
     agent = HeuristicAgent(
-        device=args.device,
+        device='cpu',
         observation_space=args.state_shape,
         action_space=args.action_shape,
     )
@@ -61,8 +62,8 @@ def get_heuristic_agent(args):
 
 
 def selfplay(args):  # always train first agent, start from random policy
-    train_envs = DummyVectorEnv([env_func for _ in range(args.training_num)])
-    test_envs = DummyVectorEnv([env_func for _ in range(args.test_num)])
+    train_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
+    test_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -161,7 +162,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--episode-per-collect', type=int, default=1000)
     parser.add_argument('--update-per-step', type=float, default=1.0)
     parser.add_argument('--batch-size', type=int, default=32)
-    parser.add_argument('--training-num', type=int, default=1000)
+    parser.add_argument('--num-parallel-env', type=int, default=16)
     parser.add_argument('--test-num', type=int, default=400)
     parser.add_argument('--seed', type=int, default=42)
 

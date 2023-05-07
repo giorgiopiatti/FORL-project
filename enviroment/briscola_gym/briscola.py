@@ -137,7 +137,7 @@ class BriscolaEnv(AECEnv):
         if self.render_mode == 'terminal':
             player_id = self._name_to_int(self.agent_selection)
             print(
-                f'Player Turn {self.agent_selection}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, Current Round {self.game.round.trace}')
+                f'Player Turn {self.agent_selection}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, Points {self.game.judger.points} Current Round {self.game.round.trace}')
 
     def close(self):
         """
