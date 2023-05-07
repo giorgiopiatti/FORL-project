@@ -130,8 +130,8 @@ class HeuristicAgent(BasePolicy):
         points_in_round = 0
         caller_played = False
         is_last = len(raw_state.trace_round) == 4
-        before_caller = next_pos(raw_state.role) == raw_state.caller_id
-        after_caller = prev_pos(raw_state.role) == raw_state.caller_id
+        before_caller = next_pos(raw_state.player_id) == raw_state.caller_id
+        after_caller = prev_pos(raw_state.player_id) == raw_state.caller_id
 
         #winner_id, winner_card = HeuristicAgent.winner(raw_state.trace_round, briscola_suit)
         winner_index = 0
@@ -218,11 +218,11 @@ class HeuristicAgent(BasePolicy):
 
         for j, raw_state in enumerate(raw_states):
             if (raw_state.role == Roles.CALLEE):
-                logits = self.heuristic_callee(batch, raw_state)
+                logits = self.heuristic_callee(raw_state)
             elif (raw_state.role == Roles.CALLER):
-                logits = self.heuristic_caller(batch, raw_state)
+                logits = self.heuristic_caller(raw_state)
             else:
-                logits = self.heuristic_good(batch, raw_state)
+                logits = self.heuristic_good(raw_state)
             global_logits[j] = logits
 
         mask = torch.tensor(mask, device=self.device)
