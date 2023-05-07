@@ -10,7 +10,7 @@ from tianshou.utils import TensorboardLogger, WandbLogger
 from tianshou.env import SubprocVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
-from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy
+from tianshou.policy import BasePolicy, DQNPolicy
 from agents.heuristic_agent import HeuristicAgent
 
 
@@ -22,7 +22,7 @@ from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 
 from multi_agents_rl.collector import MultiAgentCollector
 from multi_agents_rl.mapolicy import MultiAgentPolicyManager
-
+from agents.random import RandomPolicy
 
 def env_func():
     return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True, heuristic_ids=['callee']))
@@ -44,6 +44,7 @@ def get_agent(args, is_fixed=False):
 
 def get_random_agent(args):
     agent = RandomPolicy(
+        device='cpu',
         observation_space=args.state_shape,
         action_space=args.action_shape,
     )
@@ -52,7 +53,7 @@ def get_random_agent(args):
 
 def get_heuristic_agent(args):
     agent = HeuristicAgent(
-        device=args.device,
+        device='cpu',
         observation_space=args.state_shape,
         action_space=args.action_shape,
     )
