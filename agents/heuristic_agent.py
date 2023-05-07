@@ -45,7 +45,7 @@ class HeuristicAgent(BasePolicy):
     It randomly chooses an action from the legal action.
     """
 
-    def heuristic_callee(self, batch, raw_state):
+    def heuristic_callee(self, raw_state):
         logits = torch.zeros(40, device=self.device)
         briscola_suit = raw_state.called_card.suit
         caller_id = raw_state.caller_id
@@ -122,7 +122,7 @@ class HeuristicAgent(BasePolicy):
         
         return logits
     
-    def heuristic_good(self, batch, raw_state):
+    def heuristic_good(self, raw_state):
         logits = torch.zeros(40, device=self.device)
         briscola_suit = raw_state.called_card.suit
         caller_id = raw_state.caller_id
@@ -130,8 +130,8 @@ class HeuristicAgent(BasePolicy):
         points_in_round = 0
         caller_played = False
         is_last = len(raw_state.trace_round) == 4
-        before_caller = next_pos(raw_state.role) == raw_state.caller_id
-        after_caller = prev_pos(raw_state.role) == raw_state.caller_id
+        before_caller = next_pos(raw_state.player_id) == raw_state.caller_id
+        after_caller = prev_pos(raw_state.player_id) == raw_state.caller_id
 
         #winner_id, winner_card = HeuristicAgent.winner(raw_state.trace_round, briscola_suit)
         winner_index = 0
@@ -179,9 +179,9 @@ class HeuristicAgent(BasePolicy):
                     for rank in rank_list:
                         card = rank + suit
                         if suit == briscola_suit:
-                            w, _ = wins(winner_card, Card(current_suit, rank), winner_index, raw_state.player_id, suit)
+                            w, _ = wins(winner_card, Card(suit, rank), winner_index, raw_state.player_id, suit)
 
-                            if w == Card(current_suit, rank):
+                            if w == Card(suit, rank):
                                 logits[PLAY_ACTION_STR_TO_ID[card]] += 30
                                 if is_last:
                                     logits[PLAY_ACTION_STR_TO_ID[card]] += 11 - CARD_POINTS[rank] #take with smallest briscola if last
@@ -192,6 +192,7 @@ class HeuristicAgent(BasePolicy):
             if points_in_round <= 6:
                 for rank in rank_list:
                         for suit in suit_list:
+                            card = rank + suit
                             if caller_played: logits[PLAY_ACTION_STR_TO_ID[card]] += CARD_POINTS[rank]
                             else: logits[PLAY_ACTION_STR_TO_ID[card]] -= CARD_POINTS[rank]
 
@@ -218,11 +219,11 @@ class HeuristicAgent(BasePolicy):
 
         for j, raw_state in enumerate(raw_states):
             if (raw_state.role == Roles.CALLEE):
-                logits = self.heuristic_callee(batch, raw_state)
+                logits = self.heuristic_callee(raw_state)
             elif (raw_state.role == Roles.CALLER):
-                logits = self.heuristic_caller(batch, raw_state)
+                logits = self.heuristic_caller(raw_state)
             else:
-                logits = self.heuristic_good(batch, raw_state)
+                logits = self.heuristic_good(raw_state)
             global_logits[j] = logits
 
         mask = torch.tensor(mask, device=self.device)
