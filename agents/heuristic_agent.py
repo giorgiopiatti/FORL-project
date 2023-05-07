@@ -45,7 +45,7 @@ class HeuristicAgent(BasePolicy):
     It randomly chooses an action from the legal action.
     """
 
-    def heuristic_callee(self, batch, raw_state):
+    def heuristic_callee(self, raw_state):
         logits = torch.zeros(40, device=self.device)
         briscola_suit = raw_state.called_card.suit
         caller_id = raw_state.caller_id
@@ -122,7 +122,7 @@ class HeuristicAgent(BasePolicy):
         
         return logits
     
-    def heuristic_good(self, batch, raw_state):
+    def heuristic_good(self, raw_state):
         logits = torch.zeros(40, device=self.device)
         briscola_suit = raw_state.called_card.suit
         caller_id = raw_state.caller_id
@@ -218,13 +218,14 @@ class HeuristicAgent(BasePolicy):
 
         for j, raw_state in enumerate(raw_states):
             if (raw_state.role == Roles.CALLEE):
-                logits = self.heuristic_callee(batch, raw_state)
-            elif (self.role == Roles.CALLER):
-                logits = self.heuristic_caller(batch, raw_state)
+                logits = self.heuristic_callee(raw_state)
+            elif (raw_state.role == Roles.CALLER):
+                logits = self.heuristic_caller(raw_state)
             else:
-                logits = self.heuristic_good(batch, raw_state)
+                logits = self.heuristic_good(raw_state)
             
-        global_logits[j] = logits
+            global_logits[j] = logits
+            
         mask = torch.tensor(mask, device=self.device)
         global_logits = global_logits.masked_fill(~mask, -torch.inf)
         return Batch(act=global_logits.argmax(axis=-1))
