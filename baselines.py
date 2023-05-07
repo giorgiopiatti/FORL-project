@@ -25,7 +25,7 @@ from multi_agents_rl.mapolicy import MultiAgentPolicyManager
 from agents.random import RandomPolicy
 
 def env_func():
-    return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True, heuristic_ids=['callee']))
+    return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True, heuristic_ids=['callee', 'good_1', 'good_2', 'good_3']))
 
 def get_random_agent(args):
     agent = RandomPolicy(
@@ -46,6 +46,7 @@ def get_heuristic_agent(args):
 
 
 
+
 def selfplay(args):  # always train first agent, start from random policy
     train_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
     test_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
@@ -56,7 +57,7 @@ def selfplay(args):  # always train first agent, start from random policy
     test_envs.seed(args.seed)
 
     # Env
-    briscola = BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True,  heuristic_ids=['callee'])
+    briscola = BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True,  heuristic_ids=['callee', 'good_1', 'good_2', 'good_3'])
     env = PettingZooEnv(briscola)
     args.state_shape = briscola.observation_space_shape
     args.action_shape = briscola.action_space_shape
@@ -93,6 +94,20 @@ def selfplay(args):  # always train first agent, start from random policy
 
     res = test_collector.collect(n_episode=args.test_num)
     print('All Random', res['rew'], res['rew_std'])
+
+
+    agents_good = [get_random_agent(args),  get_random_agent(args),
+              get_heuristic_agent(args), get_heuristic_agent(args), get_heuristic_agent(args)]
+    # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
+    LERNING_AGENTS_ID = []
+    policy = MultiAgentPolicyManager(agents_good, env, LERNING_AGENTS_ID)
+
+   
+    test_collector = MultiAgentCollector(
+        policy, test_envs, LERNING_AGENTS_ID, exploration_noise=True)
+
+    res = test_collector.collect(n_episode=args.test_num)
+    print('Good Random', res['rew'], res['rew_std'])
 
 
 

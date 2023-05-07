@@ -218,14 +218,13 @@ class HeuristicAgent(BasePolicy):
 
         for j, raw_state in enumerate(raw_states):
             if (raw_state.role == Roles.CALLEE):
-                logits = self.heuristic_callee(raw_state)
+                logits = self.heuristic_callee(batch, raw_state)
             elif (raw_state.role == Roles.CALLER):
-                logits = self.heuristic_caller(raw_state)
+                logits = self.heuristic_caller(batch, raw_state)
             else:
-                logits = self.heuristic_good(raw_state)
-            
+                logits = self.heuristic_good(batch, raw_state)
             global_logits[j] = logits
-            
+
         mask = torch.tensor(mask, device=self.device)
         global_logits = global_logits.masked_fill(~mask, -torch.inf)
         return Batch(act=global_logits.argmax(axis=-1))
