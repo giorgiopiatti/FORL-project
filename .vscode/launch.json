@@ -137,6 +137,54 @@
                 "10"
             ],
             "justMyCode": false
+        },
+        {
+            "name": "learning caller & callee Heuristic DQN",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_heuristic_DQN.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10",
+                "--episode-per-collect",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "learning caller & callee cyclic SAC",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_callee_SAC_cyclic.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "10",
+                "--episode-per-collect",
+                "10",
+                "--logger",
+                "wandb",
+                "--epochs",
+                "3"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "baselines",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/baselines.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }

@@ -100,20 +100,10 @@ def selfplay(args):  # always train first agent, start from random policy
     agents = [agent_caller, agent_callee,
               get_random_agent(args), get_random_agent(args), get_random_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
-    LERNING_AGENTS_ID = ['caller', 'callee']
-    policy = MultiAgentPolicyManager(agents, env, LERNING_AGENTS_ID)
 
-    
-    # collector
-    train_collector = MultiAgentCollector(
-        policy, train_envs, LERNING_AGENTS_ID,
-        MultiAgentVectorReplayBuffer(args.buffer_size, len(train_envs)),
-        exploration_noise=False)
-    test_collector = MultiAgentCollector(
-        policy, test_envs, LERNING_AGENTS_ID, exploration_noise=False)
 
     # Log
-    args.algo_name = "SAC_caller_callee_vs_random"
+    args.algo_name = "SAC_caller_callee_cyclic_vs_random"
     log_name = os.path.join(
         args.algo_name, f'{str(args.seed)}_{shortuuid.uuid()[:8]}')
     log_path = os.path.join(args.logdir, log_name)
@@ -137,36 +127,50 @@ def selfplay(args):  # always train first agent, start from random policy
     else:  # wandb
         logger.load(writer)
 
+
+  
+    LERNING_AGENTS_ID = ['caller', 'callee']
+    policy = MultiAgentPolicyManager(agents, env, LERNING_AGENTS_ID)
+
+    # collector
+    train_collector = MultiAgentCollector(
+        policy, train_envs, LERNING_AGENTS_ID,
+        MultiAgentVectorReplayBuffer(args.buffer_size, len(train_envs)),
+        exploration_noise=False)
+    test_collector = MultiAgentCollector(
+        policy, test_envs, LERNING_AGENTS_ID, exploration_noise=False)
+
+
     def save_best_fn(policy):
         model_save_path = os.path.join(log_path, f'caller_policy_best_epoch.pth')
         torch.save(policy.policies['caller'].state_dict(), model_save_path)
         model_save_path = os.path.join(log_path, f'callee_policy_best_epoch.pth')
         torch.save(policy.policies['callee'].state_dict(), model_save_path)
 
-    def reward_metric(rews):
-        return rews[:, id_agent_learning]
-
     trainer = OffpolicyTrainer(policy,
-                               train_collector,
-                               test_collector,
-                               max_epoch=args.epoch,
-                               step_per_epoch=args.step_per_epoch,
-                               step_per_collect=0,  # NOTE this is keep but ignore by our collector
-                               episode_per_collect=args.episode_per_collect,
-                               episode_per_test=args.test_num,
-                               batch_size=args.batch_size,
-                               save_best_fn=save_best_fn,
-                               logger=logger,
-                               update_per_step=args.update_per_step,
-                               test_in_train=False)
-    trainer.run()
+                            train_collector,
+                            test_collector,
+                            max_epoch=args.epoch*args.num_generations,
+                            step_per_epoch=args.step_per_epoch,
+                            step_per_collect=0,  # NOTE this is keep but ignore by our collector
+                            episode_per_collect=args.episode_per_collect,
+                            episode_per_test=args.test_num,
+                            batch_size=args.batch_size,
+                            save_best_fn=save_best_fn,
+                            logger=logger,
+                            update_per_step=args.update_per_step,
+                            test_in_train=False)
 
+    policy.learning_policies = 'caller'
+    for epoch, epoch_stat, info in trainer:
+        if  epoch % args.epoch == 0:
+            policy.learning_policies = 'callee' if (policy.learning_policies == 'caller') else 'caller'
+
+    
     model_save_path = os.path.join(log_path, 'caller_policy_last_epoch.pth')
     torch.save(policy.policies['caller'].state_dict(), model_save_path)
     model_save_path = os.path.join(log_path, 'callee_policy_last_epoch.pth')
     torch.save(policy.policies['callee'].state_dict(), model_save_path)
-
-    # return result, policy.policies['caller']
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -180,9 +184,10 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--alpha-lr', type=float, default=3e-4)
     parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--tau', type=float, default=0.005)
-    parser.add_argument('--alpha', type=float, default=0.2)
+    parser.add_argument('--alpha', type=float, default=0.02)
     parser.add_argument('--auto-alpha', action="store_true", default=False)
-    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--epoch', type=int, default=20)
+    parser.add_argument('--num-generations', type=int, default=10)
     parser.add_argument('--step-per-epoch', type=int, default=2*8*1000)
     parser.add_argument('--episode-per-collect', type=int, default=1000)
     parser.add_argument('--update-per-step', type=float,
