@@ -24,8 +24,10 @@ from multi_agents_rl.collector import MultiAgentCollector
 from multi_agents_rl.mapolicy import MultiAgentPolicyManager
 from agents.random import RandomPolicy
 
+
 def env_func():
     return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True, heuristic_ids=['callee', 'good_1', 'good_2', 'good_3']))
+
 
 def get_random_agent(args):
     agent = RandomPolicy(
@@ -45,11 +47,11 @@ def get_heuristic_agent(args):
     return agent
 
 
-
-
 def selfplay(args):  # always train first agent, start from random policy
-    train_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
-    test_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
+    train_envs = SubprocVectorEnv(
+        [env_func for _ in range(args.num_parallel_env)])
+    test_envs = SubprocVectorEnv(
+        [env_func for _ in range(args.num_parallel_env)])
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -57,7 +59,8 @@ def selfplay(args):  # always train first agent, start from random policy
     test_envs.seed(args.seed)
 
     # Env
-    briscola = BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True,  heuristic_ids=['callee', 'good_1', 'good_2', 'good_3'])
+    briscola = BriscolaEnv(use_role_ids=True, normalize_reward=False,
+                           save_raw_state=True,  heuristic_ids=['callee', 'good_1', 'good_2', 'good_3'])
     env = PettingZooEnv(briscola)
     args.state_shape = briscola.observation_space_shape
     args.action_shape = briscola.action_space_shape
@@ -65,7 +68,7 @@ def selfplay(args):  # always train first agent, start from random policy
     # initialize agents and ma-policy
     id_agent_learning = 0
     agents_heuristic = [get_random_agent(args),  get_heuristic_agent(args),
-              get_random_agent(args), get_random_agent(args), get_random_agent(args)]
+                        get_random_agent(args), get_random_agent(args), get_random_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
     LERNING_AGENTS_ID = []
     policy = MultiAgentPolicyManager(agents_heuristic, env, LERNING_AGENTS_ID)
@@ -74,35 +77,31 @@ def selfplay(args):  # always train first agent, start from random policy
         policy, DummyVectorEnv([lambda: PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False, save_raw_state=True, heuristic_ids=['callee'], render_mode='terminal'))]), LERNING_AGENTS_ID, exploration_noise=False)
 
     collector.collect(n_episode=1, render=0.1)
-   
+
     test_collector = MultiAgentCollector(
         policy, test_envs, LERNING_AGENTS_ID, exploration_noise=True)
 
-   
     res = test_collector.collect(n_episode=args.test_num)
     print('Callee heuristic', res['rew'],  res['rew_std'])
 
     agents_random = [get_random_agent(args),  get_random_agent(args),
-              get_random_agent(args), get_random_agent(args), get_random_agent(args)]
+                     get_random_agent(args), get_random_agent(args), get_random_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
     LERNING_AGENTS_ID = []
     policy = MultiAgentPolicyManager(agents_random, env, LERNING_AGENTS_ID)
 
-   
     test_collector = MultiAgentCollector(
         policy, test_envs, LERNING_AGENTS_ID, exploration_noise=True)
 
     res = test_collector.collect(n_episode=args.test_num)
     print('All Random', res['rew'], res['rew_std'])
 
-
     agents_good = [get_random_agent(args),  get_random_agent(args),
-              get_heuristic_agent(args), get_heuristic_agent(args), get_heuristic_agent(args)]
+                   get_heuristic_agent(args), get_heuristic_agent(args), get_heuristic_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
     LERNING_AGENTS_ID = []
     policy = MultiAgentPolicyManager(agents_good, env, LERNING_AGENTS_ID)
 
-   
     test_collector = MultiAgentCollector(
         policy, test_envs, LERNING_AGENTS_ID, exploration_noise=True)
 
@@ -110,11 +109,10 @@ def selfplay(args):  # always train first agent, start from random policy
     print('Good Random', res['rew'], res['rew_std'])
 
 
-
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--num-parallel-env', type=int, default=16)
-    parser.add_argument('--test-num', type=int, default=400)
+    parser.add_argument('--test-num', type=int, default=1000)
     parser.add_argument('--seed', type=int, default=42)
     return parser
 

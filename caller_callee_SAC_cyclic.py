@@ -25,9 +25,9 @@ from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 from multi_agents_rl.collector import MultiAgentCollector
 from multi_agents_rl.mapolicy import MultiAgentPolicyManager
 
-
+from supersuit import normalize_obs_v0
 def env_func():
-    return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False))
+    return PettingZooEnv(normalize_obs_v0(BriscolaEnv(use_role_ids=True, normalize_reward=True)))
 
 
 def get_agent(args, is_fixed=False):
@@ -79,8 +79,10 @@ def get_random_agent(args):
 
 
 def selfplay(args):  # always train first agent, start from random policy
-    train_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
-    test_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
+    train_envs = SubprocVectorEnv(
+        [env_func for _ in range(args.num_parallel_env)])
+    test_envs = SubprocVectorEnv(
+        [env_func for _ in range(args.num_parallel_env)])
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -100,7 +102,6 @@ def selfplay(args):  # always train first agent, start from random policy
     agents = [agent_caller, agent_callee,
               get_random_agent(args), get_random_agent(args), get_random_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
-
 
     # Log
     args.algo_name = "SAC_caller_callee_cyclic_vs_random"
@@ -127,8 +128,6 @@ def selfplay(args):  # always train first agent, start from random policy
     else:  # wandb
         logger.load(writer)
 
-
-  
     LERNING_AGENTS_ID = ['caller', 'callee']
     policy = MultiAgentPolicyManager(agents, env, LERNING_AGENTS_ID)
 
@@ -140,33 +139,38 @@ def selfplay(args):  # always train first agent, start from random policy
     test_collector = MultiAgentCollector(
         policy, test_envs, LERNING_AGENTS_ID, exploration_noise=False)
 
-
     def save_best_fn(policy):
-        model_save_path = os.path.join(log_path, f'caller_policy_best_epoch.pth')
+        model_save_path = os.path.join(
+            log_path, f'caller_policy_best_epoch.pth')
         torch.save(policy.policies['caller'].state_dict(), model_save_path)
-        model_save_path = os.path.join(log_path, f'callee_policy_best_epoch.pth')
+        model_save_path = os.path.join(
+            log_path, f'callee_policy_best_epoch.pth')
         torch.save(policy.policies['callee'].state_dict(), model_save_path)
 
+    def reward_metric(rews):
+        return 120*rews[:, 0]
+
     trainer = OffpolicyTrainer(policy,
-                            train_collector,
-                            test_collector,
-                            max_epoch=args.epoch*args.num_generations,
-                            step_per_epoch=args.step_per_epoch,
-                            step_per_collect=0,  # NOTE this is keep but ignore by our collector
-                            episode_per_collect=args.episode_per_collect,
-                            episode_per_test=args.test_num,
-                            batch_size=args.batch_size,
-                            save_best_fn=save_best_fn,
-                            logger=logger,
-                            update_per_step=args.update_per_step,
-                            test_in_train=False)
+                               train_collector,
+                               test_collector,
+                               max_epoch=args.epoch*args.num_generations,
+                               step_per_epoch=args.step_per_epoch,
+                               step_per_collect=0,  # NOTE this is keep but ignore by our collector
+                               episode_per_collect=args.episode_per_collect,
+                               episode_per_test=args.test_num,
+                               batch_size=args.batch_size,
+                               save_best_fn=save_best_fn,
+                               logger=logger,
+                               update_per_step=args.update_per_step,
+                               reward_metric=reward_metric,
+                               test_in_train=False)
 
     policy.learning_policies = 'caller'
     for epoch, epoch_stat, info in trainer:
-        if  epoch % args.epoch == 0:
-            policy.learning_policies = 'callee' if (policy.learning_policies == 'caller') else 'caller'
+        if epoch % args.epoch == 0:
+            policy.learning_policies = 'callee' if (
+                policy.learning_policies == 'caller') else 'caller'
 
-    
     model_save_path = os.path.join(log_path, 'caller_policy_last_epoch.pth')
     torch.save(policy.policies['caller'].state_dict(), model_save_path)
     model_save_path = os.path.join(log_path, 'callee_policy_last_epoch.pth')

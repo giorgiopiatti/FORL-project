@@ -11,6 +11,7 @@ from tianshou.env import SubprocVectorEnv
 from tianshou.utils.net.common import Net
 from tianshou.trainer import offpolicy_trainer, OffpolicyTrainer
 from tianshou.policy import BasePolicy, DQNPolicy, RandomPolicy, RainbowPolicy
+from agents.heuristic_agent import HeuristicAgent
 
 
 from enviroment.briscola_gym.briscola import BriscolaEnv
@@ -93,11 +94,11 @@ def selfplay(args):  # always train first agent, start from random policy
     # initialize agents and ma-policy
     id_agent_learning = 0
     agent_caller = get_agent(args)
-    agent_callee = get_agent(args)
+    agent_callee = get_random_agent(args)
     agents = [agent_caller, agent_callee,
               get_random_agent(args), get_random_agent(args), get_random_agent(args)]
     # {'caller': 0, 'callee': 1, 'good_1': 2, 'good_2': 3, 'good_3': 4}
-    LERNING_AGENTS_ID = ['caller', 'callee']
+    LERNING_AGENTS_ID = ['caller']
     policy = MultiAgentPolicyManager(agents, env, LERNING_AGENTS_ID)
 
     # collector
@@ -109,7 +110,7 @@ def selfplay(args):  # always train first agent, start from random policy
         policy, test_envs, LERNING_AGENTS_ID, exploration_noise=True)
 
     # Log
-    args.algo_name = "RAINBOW_caller_callee"
+    args.algo_name = "RAINBOW_caller_randoms"
     log_name = os.path.join(
         args.algo_name, f'{str(args.seed)}_{shortuuid.uuid()[:8]}')
     log_path = os.path.join(args.logdir, log_name)
@@ -137,9 +138,6 @@ def selfplay(args):  # always train first agent, start from random policy
         model_save_path = os.path.join(
             log_path, f'caller_policy_best_epoch.pth')
         torch.save(policy.policies['caller'].state_dict(), model_save_path)
-        model_save_path = os.path.join(
-            log_path, f'callee_policy_best_epoch.pth')
-        torch.save(policy.policies['callee'].state_dict(), model_save_path)
 
     def train_fn(epoch, env_step):
         # nature DQN setting, linear decay in the first 1M steps
@@ -149,13 +147,11 @@ def selfplay(args):  # always train first agent, start from random policy
         else:
             eps = args.eps_train_final
         policy.policies['caller'].set_eps(eps)
-        policy.policies['callee'].set_eps(eps)
         if env_step % 1000 == 0:
             logger.write("train/env_step", env_step, {"train/eps": eps})
 
     def test_fn(epoch, env_step):
         policy.policies['caller'].set_eps(args.eps_test)
-        policy.policies['callee'].set_eps(args.eps_test)
 
     def reward_metric(rews):
         return rews[:, id_agent_learning]
@@ -163,7 +159,7 @@ def selfplay(args):  # always train first agent, start from random policy
     trainer = OffpolicyTrainer(policy,
                                train_collector,
                                test_collector,
-                               max_epoch=args.epoch*args.num_generations if args.cyclic_training else args.epoch,
+                               max_epoch=args.epoch,
                                step_per_epoch=args.step_per_epoch,
                                step_per_collect=0,  # NOTE this is keep but ignore by our collector
                                episode_per_collect=args.episode_per_collect,
@@ -177,19 +173,10 @@ def selfplay(args):  # always train first agent, start from random policy
                                train_fn=train_fn,
                                test_in_train=False)
 
-    if args.cyclic_training:
-        policy.learning_policies = 'caller'
-        for epoch, epoch_stat, info in trainer:
-            if epoch % args.epoch == 0:
-                policy.learning_policies = 'callee' if (
-                    policy.learning_policies == 'caller') else 'caller'
-    else:
-        trainer.run()
+    trainer.run()
 
     model_save_path = os.path.join(log_path, 'caller_policy_last_epoch.pth')
     torch.save(policy.policies['caller'].state_dict(), model_save_path)
-    model_save_path = os.path.join(log_path, 'callee_policy_last_epoch.pth')
-    torch.save(policy.policies['callee'].state_dict(), model_save_path)
 
 
 def get_parser() -> argparse.ArgumentParser:
@@ -203,9 +190,6 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--test-num', type=int, default=400)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--buffer-size', type=int, default=2*8*1000)
-    parser.add_argument('--num-generations', type=int, default=10)
-    parser.add_argument('--cyclic_training',
-                        action="store_true", default=False)
     parser.add_argument('--lr', type=float, default=0.0000625)
     parser.add_argument('--eps-test', type=float, default=0.005)
     parser.add_argument('--eps-train', type=float, default=1.0)
