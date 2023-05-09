@@ -112,7 +112,7 @@ def selfplay(args):  # always train first agent, start from random policy
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--num-parallel-env', type=int, default=16)
-    parser.add_argument('--test-num', type=int, default=1000)
+    parser.add_argument('--test-num', type=int, default=30000)
     parser.add_argument('--seed', type=int, default=42)
     return parser
 

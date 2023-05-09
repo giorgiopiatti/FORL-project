@@ -13,3 +13,9 @@ Documentation:
 - https://pettingzoo.farama.org/#
 - https://gymnasium.farama.org/
 - https://tianshou.readthedocs.io/en/master/
+
+
+
+15'000
+Callee heuristic 83.85186666666667 19.59676988304159
+All Random 77.26426666666667 20.520533532591763

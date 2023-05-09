@@ -85,10 +85,28 @@
             "justMyCode": false
         },
         {
-            "name": "SAC",
+            "name": "caller SAC",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/caller_callee_SAC.py",
+            "program": "${workspaceFolder}/caller_SAC.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--test-num",
+                "10",
+                "--training-num",
+                "10",
+                "--step-per-epoch",
+                "2000",
+                "--episode-per-collect",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "caller SAC norm",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/caller_SAC_norm.py",
             "console": "integratedTerminal",
             "args": [
                 "--test-num",

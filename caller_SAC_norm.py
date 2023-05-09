@@ -14,7 +14,7 @@ from tianshou.data import ReplayBuffer
 from tianshou.policy import BasePolicy, DQNPolicy
 
 from tianshou.policy import DiscreteSACPolicy
-from enviroment.briscola_gym.briscola import BriscolaEnv
+from enviroment.briscola_gym.briscola_features import BriscolaEnv
 from tianshou.env import PettingZooEnv
 
 import shortuuid
@@ -24,6 +24,8 @@ from agents.ac import Actor, Critic
 from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 from multi_agents_rl.collector import MultiAgentCollector
 from multi_agents_rl.mapolicy import MultiAgentPolicyManager
+import gymnasium
+from multi_agents_rl.observation_wrapper import VectorEnvNormObs
 
 
 def env_func():
@@ -83,6 +85,11 @@ def selfplay(args):  # always train first agent, start from random policy
         [env_func for _ in range(args.num_parallel_env)])
     test_envs = SubprocVectorEnv(
         [env_func for _ in range(args.num_parallel_env)])
+
+    train_envs = VectorEnvNormObs(train_envs)
+    test_envs = VectorEnvNormObs(test_envs, update_obs_rms=False)
+    test_envs.set_obs_rms(train_envs.get_obs_rms())
+
     # seed
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -113,7 +120,7 @@ def selfplay(args):  # always train first agent, start from random policy
         policy, test_envs, LERNING_AGENTS_ID, exploration_noise=False)
 
     # Log
-    args.algo_name = "SAC_caller_vs_random"
+    args.algo_name = "SAC_caller_vs_random NORM"
     log_name = os.path.join(
         args.algo_name, f'{str(args.seed)}_{shortuuid.uuid()[:8]}')
     log_path = os.path.join(args.logdir, log_name)
@@ -170,10 +177,10 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument('--seed', type=int, default=42)
     NUM_GAMES = 15000
     parser.add_argument('--buffer-size', type=int, default=8*NUM_GAMES)
-    parser.add_argument('--actor-lr', type=float, default=1e-4)
-    parser.add_argument('--critic-lr', type=float, default=1e-3)
+    parser.add_argument('--actor-lr', type=float, default=1e-5) #1e-4
+    parser.add_argument('--critic-lr', type=float, default=1e-4) #1e-3
     parser.add_argument('--alpha-lr', type=float, default=3e-4)
-    parser.add_argument('--gamma', type=float, default=0.95)
+    parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--tau', type=float, default=0.005)
     parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--auto-alpha', action="store_true", default=False)
@@ -184,7 +191,7 @@ def get_parser() -> argparse.ArgumentParser:
                         default=0.01)  # NOTE 8*1500 gradient steps
     parser.add_argument('--batch-size', type=int, default=512)
     parser.add_argument('--hidden-sizes', type=int,
-                        nargs='*', default=[128, 128, 128, 128])
+                        nargs='*', default=[256, 256])
     parser.add_argument('--num-parallel-env', type=int, default=20)
     parser.add_argument('--rew-norm', action="store_true", default=False)
     parser.add_argument('--n-step', type=int, default=1)

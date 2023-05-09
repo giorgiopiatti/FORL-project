@@ -21,7 +21,7 @@ from multi_agents_rl.buffer import MultiAgentVectorReplayBuffer
 
 from multi_agents_rl.collector import MultiAgentCollector
 from multi_agents_rl.mapolicy import MultiAgentPolicyManager
-
+from multi_agents_rl.observation_wrapper import VectorEnvNormObs
 
 def env_func():
     return PettingZooEnv(BriscolaEnv(use_role_ids=True, normalize_reward=False))
@@ -53,7 +53,13 @@ def get_random_agent(args):
 def selfplay(args):  # always train first agent, start from random policy
     train_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
     test_envs = SubprocVectorEnv([env_func for _ in range(args.num_parallel_env)])
+    
+    train_envs = VectorEnvNormObs(train_envs)
+    test_envs = VectorEnvNormObs(test_envs, update_obs_rms=False)
+    test_envs.set_obs_rms(train_envs.get_obs_rms())
+    
     # seed
+
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     train_envs.seed(args.seed)
@@ -146,19 +152,22 @@ def selfplay(args):  # always train first agent, start from random policy
 
 def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epoch', type=int, default=100)
-    parser.add_argument('--step-per-epoch', type=int, default=2*8*1000)
-    parser.add_argument('--episode-per-collect', type=int, default=1000)
-    parser.add_argument('--update-per-step', type=float, default=1.0)
-    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--epoch', type=int, default=10)
+    NUM_GAMES = 15000
+    parser.add_argument('--buffer-size', type=int, default=8*NUM_GAMES)
+    parser.add_argument('--step-per-epoch', type=int, default=5*8*NUM_GAMES)
+    parser.add_argument('--episode-per-collect', type=int, default=NUM_GAMES)
+    parser.add_argument('--update-per-step', type=float,
+                        default=0.01)  # NOTE 8*1500 gradient steps
+    parser.add_argument('--batch-size', type=int, default=512)
+    
+
     parser.add_argument('--num-parallel-env', type=int, default=16)
-    parser.add_argument('--test-num', type=int, default=400)
+    parser.add_argument('--test-num', type=int, default=30000)
     parser.add_argument('--seed', type=int, default=42)
 
     parser.add_argument('--eps-test', type=float, default=0.005)
     parser.add_argument('--eps-train', type=float, default=1.0)
-    parser.add_argument('--buffer-size', type=int, default=2*8*1000)
-   
 
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument(
