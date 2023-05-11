@@ -6,7 +6,7 @@ import functools
 from enviroment.briscola_gym.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
 from enviroment.briscola_gym.player_state import BriscolaPlayerState
-from enviroment.briscola_gym.actions import BriscolaAction, PlayCardAction
+from enviroment.briscola_gym.actions import BriscolaAction, PlayCardAction, PLAY_ACTION_STR_TO_ID
 from gymnasium.utils import seeding
 from enviroment.briscola_gym import Game
 
@@ -15,6 +15,53 @@ from gymnasium.spaces import Discrete
 from gymnasium import spaces
 from enviroment.briscola_gym.utils import Roles
 import torch.nn as nn
+
+from enviroment.briscola_gym.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
+
+
+def one_hot(a, shape):
+    b = np.zeros(shape)
+    for el in a:
+        b[el] = 1
+    return b
+
+DICT_SUIT_TO_INT = {
+    'C':0,
+    'D':1,
+    'H':2,
+    'S':3
+}
+
+def wins(card1, card2, index1, index2, briscola_suit):
+    winner_card = card1
+    winner_index = index1
+    if winner_card.suit == briscola_suit:
+        if CARD_RANK_WITHIN_SUIT_INDEX[winner_card.rank] < CARD_RANK_WITHIN_SUIT_INDEX[card2.rank] and card2.suit == briscola_suit:
+            winner_card = card2
+            winner_index = index2
+
+    else:
+        if card2.suit == briscola_suit or (CARD_RANK_WITHIN_SUIT_INDEX[card2.rank] > CARD_RANK_WITHIN_SUIT_INDEX[winner_card.rank] and card2.suit == winner_card.suit):
+            winner_card = card2
+            winner_index = index2
+    return winner_card, winner_index
+
+def winning(trace_round, briscola_suit):
+    if trace_round == []:
+        return None, None
+    else:
+        winning_player_obj, winning_action = trace_round[0]
+        winning_player = winning_player_obj.player_id
+        winning_card = winning_action.card
+        for i, (player, action) in enumerate (trace_round):
+            player_id = player.player_id
+            current_card = action.card
+
+            if (i >= 1):
+                winning_card, winning_player= wins(winning_card, current_card, winning_player, player_id, briscola_suit)
+    
+        return winning_card, winning_player
+
 
 class BriscolaEnv(gym.Env):
     ''' Briscola Environment
@@ -57,19 +104,23 @@ class BriscolaEnv(gym.Env):
         # 0 is used for padding
 
         self._raw_observation_space =  spaces.Dict({
-                            'caller_id': player_id_space,
-                            'points': spaces.Box(low=0, high=120, shape=(5,), dtype=np.int8),
-                            'role': spaces.Box(low=1, high=3, shape=(1,), dtype=np.int8),
-                            'player_id': player_id_space,
-                            'called_card': card_space,
-                            'current_hand': spaces.Tuple([card_space]*8),
-                            'other_hands': spaces.Tuple([card_space]*32),
-                            'trace': spaces.Tuple([round_space]*8),
-                            'trace_round': round_space
+                            'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+                            'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
+                            'player_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+                            'briscola_suit': spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
+                            'belief': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+                            'current_hand': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+                            'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+                            'trace_round': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+                            'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+                            'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+                            'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+                            'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+                            'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
                         })
         self.observation_space = spaces.Dict(
             {
-                "observation": spaces.Box(low=0, high=120, shape=(spaces.flatdim(self._raw_observation_space),), dtype=np.int8),
+                "observation": spaces.Box(low=0, high=1, shape=(spaces.flatdim(self._raw_observation_space),), dtype=np.int8),
                 "action_mask": spaces.Box(
                     low=0, high=1, shape=(self.num_actions,), dtype=np.int8
                 )
@@ -170,17 +221,41 @@ class BriscolaEnv(gym.Env):
         Args:
             state (dict): dict of original state
         '''
+        # 'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+        #                     'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
+        #                     'player_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+        #                     'briscola_suit': spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
+        #                     'belief': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+        #                     'current_hand': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+        #                     'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+        #                     'trace_round': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+        #                     'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+        #                     'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+        #                     'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+        #                     'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+        #                     'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
+        briscola_suit = state.called_card.suit
+        wc, wp = winning(state.trace_round, briscola_suit)
+        flattened_trace = [item for round in state.trace for item in round]
+
+        points_in_round = 0
+        for i, (prev_player, prev_card) in enumerate (state.trace_round):
+            points_in_round += CARD_POINTS[prev_card.card.rank]
 
         encoding = dict(
-            caller_id=np.array([state.caller_id+1]),
-            points=state.points,
-            role=np.array([state.role.value]),
-            player_id=np.array([state.player_id+1]),
-            called_card=state.called_card.vector(),
-            current_hand=_pad_cards(_cards2array(state.current_hand), 8),
-            other_hands=_pad_cards(_cards2array(state.other_hands), 32),
-            trace=_trace2array(state.trace),
-            trace_round=_round2array(state.trace_round)
+            caller_id=one_hot([state.caller_id], shape=5),
+            role=one_hot([state.role.value-1], shape=3),
+            player_id=one_hot([state.player_id], shape=5),
+            briscola_suit=one_hot([DICT_SUIT_TO_INT[briscola_suit]], shape=4),
+            belief= one_hot([], shape=5) if state.called_card_player == -1 else one_hot([state.called_card_player], shape=5),
+            current_hand=one_hot([PLAY_ACTION_STR_TO_ID[card.rank + card.suit] for card in state.current_hand], shape=40),
+            played_cards=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit] for _, card in flattened_trace], shape=40),
+            trace_round=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit] for _, card in state.trace_round], shape=40),
+            winning_card= one_hot([], shape=40) if wc is None else one_hot([PLAY_ACTION_STR_TO_ID[wc.rank + wc.suit]], shape=40),
+            winning_player=one_hot([], shape=5) if wp is None else one_hot([wp], shape=5),
+            round_points=points_in_round/120,
+            position=one_hot([len(state.trace_round)], shape=5),
+            is_last=len(state.trace_round) == 4,
         )
         #return encoding
         return spaces.utils.flatten(self._raw_observation_space, encoding)
