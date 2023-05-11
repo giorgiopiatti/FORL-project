@@ -7,64 +7,41 @@ from enviroment.briscola_gym.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
 from enviroment.briscola_gym.player_state import BriscolaPlayerState
 from enviroment.briscola_gym.actions import BriscolaAction, PlayCardAction
-
+from gymnasium.utils import seeding
 from enviroment.briscola_gym import Game
 
 import gymnasium as gym
 from gymnasium.spaces import Discrete
-from pettingzoo import AECEnv
-from pettingzoo.utils import agent_selector, wrappers
 from gymnasium import spaces
+from enviroment.briscola_gym.utils import Roles
+import torch.nn as nn
 
-
-def env(render_mode=None):
-    """
-    The env function often wraps the environment in wrappers by default.
-    You can find full documentation for these methods
-    elsewhere in the developer documentation.
-    """
-    internal_render_mode = render_mode if render_mode != "ansi" else "human"
-    env = BriscolaEnv(render_mode=internal_render_mode)
-    # This wrapper is only for environments which print results to the terminal
-    if render_mode == "ansi":
-        env = wrappers.CaptureStdoutWrapper(env)
-    # this wrapper helps error handling for discrete action spaces
-    env = wrappers.AssertOutOfBoundsWrapper(env)
-    # Provides a wide vareity of helpful user errors
-    # Strongly recommended
-    env = wrappers.OrderEnforcingWrapper(env)
-    return env
-
-
-class BriscolaEnv(AECEnv):
+class BriscolaEnv(gym.Env):
     ''' Briscola Environment
 
         State Encoding
         shape = [N, 40]
 
+        Convention: if use_role_ids = False, we play as player 0.
+
     '''
 
-    def __init__(self, render_mode=None, use_role_ids=False, normalize_reward=True, save_raw_state = False, heuristic_ids = []):
+    def __init__(self, render_mode=None, role='caller',
+                 normalize_reward=True, save_raw_state = False, heuristic_ids = [],
+                 agents= {'callee': 'random',  'good_1': 'random', 'good_2': 'random' , 'good_3': 'random'} ):
 
         self.name = 'briscola_5'
-        self.game = Game()
+        self.game = Game(print_game=(render_mode=='terminal_env'))
         self.screen = None
         self.normalize_reward = normalize_reward
-        self.use_role_ids = use_role_ids
         self.save_raw_state = save_raw_state
         self.heuristic_ids = heuristic_ids
-        if not hasattr(self, "agents"):
-            if self.use_role_ids:
-                self.agents = ['caller', 'callee',
-                               'good_1', 'good_2', 'good_3']
-            else:
-                self.agents = [f"player_{i}" for i in range(5)]
+        self.use_role_ids = True
+        self.role = role
+        self.agents = agents
 
-        self.possible_agents = self.agents
         self.num_actions = 40
-        self.action_spaces = spaces.Dict(
-            {agent: spaces.Discrete(40) for agent in self.agents}
-        )
+        self.action_space = spaces.Discrete(40)
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
         # (value, seed, points)
@@ -79,11 +56,7 @@ class BriscolaEnv(AECEnv):
         round_space = spaces.Tuple([played_card_space]*5)
         # 0 is used for padding
 
-        self.observation_spaces = spaces.Dict(
-            {agent:
-                spaces.Dict(
-                    {
-                        "observation": spaces.Dict({
+        self._raw_observation_space =  spaces.Dict({
                             'caller_id': player_id_space,
                             'points': spaces.Box(low=0, high=120, shape=(5,), dtype=np.int8),
                             'role': spaces.Box(low=1, high=3, shape=(1,), dtype=np.int8),
@@ -93,36 +66,19 @@ class BriscolaEnv(AECEnv):
                             'other_hands': spaces.Tuple([card_space]*32),
                             'trace': spaces.Tuple([round_space]*8),
                             'trace_round': round_space
-
-                        }),
-                        "action_mask": spaces.Box(
-                            low=0, high=1, shape=(self.num_actions,), dtype=np.int8
-                        ),
-                    }
+                        })
+        self.observation_space = spaces.Dict(
+            {
+                "observation": spaces.Box(low=0, high=120, shape=(spaces.flatdim(self._raw_observation_space),), dtype=np.int8),
+                "action_mask": spaces.Box(
+                    low=0, high=1, shape=(self.num_actions,), dtype=np.int8
                 )
-                for agent in self.agents
-             }
+            }
         )
 
+        self.observation_shape = spaces.flatdim(self._raw_observation_space)
         self.render_mode = render_mode
 
-    def observation_space(self, agent):
-        return self.observation_spaces[agent]
-
-    def action_space(self, agent):
-        return self.action_spaces[agent]
-
-    @property
-    def observation_space_shape(self):
-        return spaces.flatdim(self.observation_spaces[self._int_to_name(0)]['observation'])
-
-    @property
-    def action_space_shape(self):
-        return spaces.flatdim(self.action_spaces[self._int_to_name(0)])
-
-    @property
-    def _original_observation_space(self):
-        return self.observation_spaces[self._int_to_name(0)]['observation']
 
     def render(self):
         """
@@ -135,9 +91,9 @@ class BriscolaEnv(AECEnv):
             )
             return
         if self.render_mode == 'terminal':
-            player_id = self._name_to_int(self.agent_selection)
+            player_id = self._name_to_int(self.role)
             print(
-                f'Player Turn {self.agent_selection}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, Points {self.game.judger.points} Current Round {self.game.round.trace}')
+                f'Player {self.role}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, Points {self.game.judger.points} Current Round {self.game.round.trace}')
 
     def close(self):
         """
@@ -146,42 +102,38 @@ class BriscolaEnv(AECEnv):
         user is no longer using the environment.
         """
         pass
+    
+
+    def _play_until_is_me(self, state, player_id):
+        while player_id != self._player_id and not self.game.is_over():
+            current_role = self._int_to_name(player_id)
+            if isinstance(self.agents[current_role], nn.Module):
+                action = self.agents[current_role].get_action_and_value(x=self._get_obs(player_id)) #NOTE need to be tested
+            elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random':
+                action =  state.actions[self.np_random.choice(len(state.actions), size=1)[0]]
+            else:
+                raise ValueError(f'self.agents[{current_role}] is invalid')
+            state, player_id = self.game.step(action)
+        return state
 
     def reset(self, seed=None, options=None):
-        if seed is not None:
-            self.seed(seed=seed)
         state, player_id = self.game.init_game()
+
         self._construct_int_name_mappings(
             self.game.caller_id, self.game.callee_id)
-        self.agent_selection = self._int_to_name(player_id)
-        self.rewards = self._convert_to_dict(
-            [0 for _ in range(self.num_agents)])
-        self._cumulative_rewards = self._convert_to_dict(
-            [0 for _ in range(self.num_agents)]
-        )
-        self.terminations = self._convert_to_dict(
-            [False for _ in range(self.num_agents)]
-        )
-        self.truncations = self._convert_to_dict(
-            [False for _ in range(self.num_agents)]
-        )
-        self.infos = self._convert_to_dict(
-            [{"legal_moves": []} for _ in range(self.num_agents)]
-        )
-        self.next_legal_moves = list(sorted(self._get_legal_actions(state)))
-        self._last_obs = self.observe(self.agent_selection)
+       
+        self._player_id = self._name_to_int(self.role)
+        
+        # Play until ist my first turn to play a card
+        state = self._play_until_is_me(state, player_id)
 
-        return self._last_obs
+        observation = self._get_obs(self._player_id)
+        info = self._get_info()
+       
+        return observation, info
 
-    def observe(self, agent):
-        state = self.game.get_state(self._name_to_int(agent))
-        if self.save_raw_state and agent in self.heuristic_ids:
-            self.infos[agent]['raw_state'] = deepcopy(state)
-
-        if self.game.is_over():
-                self.infos[agent]['final_state'] = {a: self._extract_state(self.game.get_state(self._name_to_int(a)))  for a in self.agents}
-
-
+    def _get_obs(self, player_id):
+        state = self.game.get_state(player_id)
         legal_moves = self._get_legal_actions(state)
         action_mask = np.zeros(self.num_actions, "int8")
         for i in legal_moves:
@@ -189,42 +141,28 @@ class BriscolaEnv(AECEnv):
 
         return dict({"observation": self._extract_state(state), "action_mask": action_mask})
 
-    def step(self, action):
-        if (
-            self.terminations[self.agent_selection]
-            or self.truncations[self.agent_selection]
-        ):
-            return self._was_dead_step(action)
+    def _get_info(self):
+        return {}
 
+    def step(self, action):
+        self.render()
         action = self._decode_action(action)
         next_state, next_player_id = self.game.step(action)
-        next_player = self._int_to_name(next_player_id)
-        self.agent_selection = next_player
+        # Play until is my turn
+        next_state = self._play_until_is_me(next_state, next_player_id)
 
-        self._last_obs = self.observe(self.agent_selection)
-
+        terminated = False
+        reward = np.array([0.0])
         if self.game.is_over():
-            self.rewards = self._convert_to_dict(
-                self._scale_rewards(self._get_payoffs())
-            )
-            self.next_legal_moves = []
-            self.terminations = self._convert_to_dict(
-                [True for _ in range(self.num_agents)]
-            )
-            self.truncations = self._convert_to_dict(
-                [False for _ in range(self.num_agents)]
-            )
-        else:
-            self.next_legal_moves = self._get_legal_actions(
-                self.game.get_state(next_player_id))
+            terminated = True
+            reward =  self._scale_rewards(self._get_payoffs())[self._player_id]
+        
+        observation = self._get_obs(self._player_id)
+        info = self._get_info()
 
-        self._cumulative_rewards[self.agent_selection] = 0
-        self.agent_selection = next_player
-        self._accumulate_rewards()
-        self._deads_step_first()
-
-        # if self.render_mode == "human":
-        #      self.render()
+        self.render()
+        return observation, reward, terminated, False, info
+     
 
     def _extract_state(self, state: BriscolaPlayerState):
         ''' Encode state:
@@ -244,8 +182,8 @@ class BriscolaEnv(AECEnv):
             trace=_trace2array(state.trace),
             trace_round=_round2array(state.trace_round)
         )
-        # return state
-        return spaces.utils.flatten(self._original_observation_space, encoding)
+        #return encoding
+        return spaces.utils.flatten(self._raw_observation_space, encoding)
 
     def _get_payoffs(self):
         ''' Get the payoffs of players. Must be implemented in the child class.
@@ -314,12 +252,9 @@ class BriscolaEnv(AECEnv):
             return self.role_to_int_map[name]
         return self.agents.index(name)
 
-    def _convert_to_dict(self, list_of_list):
-        return {self._int_to_name(i):  list_of_list[i] for i in range(self.num_agents)}
-
     def seed(self, seed):
-        self.game.seed(seed)
-
+        self.np_random, seed = seeding.np_random(seed)
+        self.game.seed(seed=seed)
 
 def _cards2array(cards: List[Card]):
     matrix = []

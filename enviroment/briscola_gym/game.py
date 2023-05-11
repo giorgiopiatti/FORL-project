@@ -19,10 +19,11 @@ class BriscolaGame:
     information.
     '''
 
-    def __init__(self, allow_step_back=False):
+    def __init__(self, allow_step_back=False, print_game = False):
         self.allow_step_back = allow_step_back
         self.np_random = np.random.RandomState()
         self.num_players = 5
+        self.print_game = print_game
 
     def init_game(self):
         ''' Initialize players and state.
@@ -134,7 +135,7 @@ class BriscolaGame:
 
         player = self.players[self.round.current_player]
         player.play(action)
-        if DEBUG_ENV:
+        if self.print_game:
             print(f'Player {player.player_id} -> {action.card}')
 
         self.round.proceed_round(player, action)
@@ -144,7 +145,7 @@ class BriscolaGame:
         # get next state
         if self.round.round_ended:
             # NOTE Debug
-            if DEBUG_ENV:
+            if self.print_game:
                 print('----- Round END ----')
             winner, points = self.round.end_round()
             self.round = BriscolaRound(winner, self.briscola_suit)
@@ -154,7 +155,7 @@ class BriscolaGame:
         state = self.get_state(self.round.current_player)
         self.state = state
 
-        if DEBUG_ENV:
+        if self.print_game:
             print(state)
         return state, self.round.current_player
 

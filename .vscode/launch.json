@@ -203,6 +203,14 @@
             "program": "${workspaceFolder}/baselines.py",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+            "name": "ppo",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }
