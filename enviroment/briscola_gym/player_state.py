@@ -33,6 +33,7 @@ class BriscolaPlayerState:
         self.trace = public.trace
         self.trace_round = public.trace_round
         self.points = public.points
+        self.called_card_player = public.called_card_player
 
         # Private info
         self.role = role
@@ -52,6 +53,7 @@ class BriscolaPlayerState:
             'trace' : self.trace,
             'trace_round' : self.trace_round,
             'points' : self.points,
+            'called_card_player' : self.called_card_player,
 
             'role' : self.role,
             'player_id' : self.player_id,
