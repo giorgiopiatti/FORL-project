@@ -35,7 +35,7 @@ def parse_args():
         help="the entity (team) of wandb's project")
 
     # Algorithm specific arguments
-    parser.add_argument("--total-timesteps", type=int, default=8*500000,
+    parser.add_argument("--total-timesteps", type=int, default=8*5000000,
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=2.5e-4,
         help="the learning rate of the optimizer")
@@ -81,7 +81,7 @@ def parse_args():
 def make_env(seed, verbose=False):
     def thunk():
         env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                          role='callee',  agents= {'caller': 'random',  'good_1': 'random', 'good_2': 'random' , 'good_3': 'random'})
+                          role='caller',  agents= {'callee': 'random',  'good_1': 'random', 'good_2': 'random' , 'good_3': 'random'})
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.seed(seed)
         args.observation_shape = env.observation_shape
