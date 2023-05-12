@@ -2,6 +2,7 @@
 from copy import deepcopy
 import numpy as np
 import functools
+from agents.heuristic_agent import HeuristicAgent
 
 from environment.briscola_base.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
@@ -166,6 +167,9 @@ class BriscolaEnv(gym.Env):
             elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random':
                 action = state.actions[self.np_random.choice(
                     len(state.actions), size=1)[0]]
+            elif isinstance(self.agents[current_role], HeuristicAgent):
+                action = self.agents[current_role].get_heuristic_action(
+                    state, [a.to_action_id() for a in state.actions])
             else:
                 raise ValueError(f'self.agents[{current_role}] is invalid')
             state, player_id = self.game.step(action)
