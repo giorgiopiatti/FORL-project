@@ -137,14 +137,14 @@ class Agent(nn.Module):
         probs = Categorical(logits=logits)
         if action is None:
             action = probs.sample()
-        # if action is None and deterministic:
-        #     action =
+        if deterministic:
+            action = logits.argmax(axis=1)
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
 
 def evaluate():
     env = gym.vector.SyncVectorEnv(
-        [make_env(args.seed+i, role_now_training, briscola_agents)
+        [make_env(args.seed+(args.num_generations*args.num_envs), role_now_training, briscola_agents)
          for i in range(args.num_test_games)]
     )
     data, _ = env.reset()
@@ -155,14 +155,22 @@ def evaluate():
         # ALGO LOGIC: action logic
         with torch.no_grad():
             action, logprob, _, value = agent.get_action_and_value(
-                next_obs, next_mask)
+                next_obs, next_mask, deterministic=True)
 
         # TRY NOT TO MODIFY: execute the game and log data.
         data, reward, done, _, info = env.step(action.cpu().numpy())
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
-    writer.add_scalar("charts/test_games_mean", reward.mean(), global_step)
-    writer.add_scalar("charts/test_games_std", reward.std(), global_step)
+    if role_now_training in ['caller', 'callee']:
+        writer.add_scalar("test/reward_bad_team_mean", reward.mean(), global_step)
+        writer.add_scalar("test/reward_bad_team_std", reward.std(), global_step)
+        writer.add_scalar("test/reward_good_team_mean", (120.0 - reward).mean(), global_step)
+        writer.add_scalar("test/reward_good_team_std", (120.0 - reward).std(), global_step)
+    else:
+        writer.add_scalar("test/reward_good_team_mean", reward.mean(), global_step)
+        writer.add_scalar("test/reward_good_team_std", reward.std(), global_step)
+        writer.add_scalar("test/reward_bad_team_mean", (120.0 - reward).mean(), global_step)
+        writer.add_scalar("test/reward_bad_team_std", (120.0 - reward).std(), global_step)
 
 
 if __name__ == "__main__":
@@ -179,6 +187,7 @@ if __name__ == "__main__":
             name=run_name,
             monitor_gym=True,
             save_code=True,
+            tensorboard=True
         )
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -278,12 +287,10 @@ if __name__ == "__main__":
                 if 'final_info' in info.keys():
                     for item in info['final_info']:
                         if "episode" in item.keys():
-                            print(
-                                f"global_step={global_step}, episodic_return={item['episode']['r']}")
                             writer.add_scalar(
-                                "charts/episodic_return", item["episode"]["r"], global_step)
+                                f"charts/{role_now_training}/episodic_return", item["episode"]["r"], global_step)
                             writer.add_scalar(
-                                "charts/episodic_length", item["episode"]["l"], global_step)
+                                f"charts/{role_now_training}/episodic_length", item["episode"]["l"], global_step)
                             break
 
             # bootstrap value if not done
@@ -383,20 +390,20 @@ if __name__ == "__main__":
                 np.var(y_true - y_pred) / var_y
 
             # TRY NOT TO MODIFY: record rewards for plotting purposes
-            writer.add_scalar("charts/learning_rate",
+            writer.add_scalar(f"charts/{role_now_training}/learning_rate",
                               optimizer.param_groups[0]["lr"], global_step)
-            writer.add_scalar("losses/value_loss", v_loss.item(), global_step)
-            writer.add_scalar("losses/policy_loss",
+            writer.add_scalar(f"losses/{role_now_training}/value_loss", v_loss.item(), global_step)
+            writer.add_scalar(f"losses/{role_now_training}/policy_loss",
                               pg_loss.item(), global_step)
-            writer.add_scalar("losses/entropy",
+            writer.add_scalar(f"losses/{role_now_training}/entropy",
                               entropy_loss.item(), global_step)
-            writer.add_scalar("losses/old_approx_kl",
+            writer.add_scalar(f"losses/{role_now_training}/old_approx_kl",
                               old_approx_kl.item(), global_step)
-            writer.add_scalar("losses/approx_kl",
+            writer.add_scalar(f"losses/{role_now_training}/approx_kl",
                               approx_kl.item(), global_step)
-            writer.add_scalar("losses/clipfrac",
+            writer.add_scalar(f"losses/{role_now_training}/clipfrac",
                               np.mean(clipfracs), global_step)
-            writer.add_scalar("losses/explained_variance",
+            writer.add_scalar(f"losses/{role_now_training}/explained_variance",
                               explained_var, global_step)
             print("SPS:", int(global_step / (time.time() - start_time)))
             writer.add_scalar("charts/SPS", int(global_step /
