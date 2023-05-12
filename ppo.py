@@ -78,24 +78,31 @@ def parse_args():
     parser.add_argument("--num-generations", type=int, default=1)
     parser.add_argument("--briscola-callee-heuristic", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
     parser.add_argument("--briscola-caller-heuristic", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
+    parser.add_argument('--logdir', type=str,
+                        default='log/')
     args = parser.parse_args()
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
 
-    assert args.briscola_train_mode in ["solo"]
+    assert args.briscola_train_mode in ["solo", "bad_multiple_networks", "bad_single_network"]
     if args.briscola_train_mode == 'solo':
         assert args.num_generations == 1
         assert args.briscola_roles_train in ["caller", "callee"]
         assert not (args.briscola_caller_heuristic and args.briscola_roles_train == 'caller')
         assert not (args.briscola_callee_heuristic and args.briscola_roles_train == 'callee')
+    if args.briscola_train_mode in ['bad_multiple_networks', 'bad_single_network']:
+        assert args.num_generations >= 1
+        args.briscola_roles_train = ['caller', 'callee']
+        assert not args.briscola_caller_heuristic
+        assert not args.briscola_callee_heuristic
     # fmt: on
     return args
 
 
-def make_env(seed, role_training, briscola_agents, verbose=False):
+def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_eval=False):
     def thunk():
         env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                          role=role_training,  agents=briscola_agents)
+                          role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=device)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.seed(seed)
         args.observation_shape = env.observation_shape
@@ -135,16 +142,34 @@ class Agent(nn.Module):
         logits = self.actor(x)
         logits[~action_mask] = -torch.inf
         probs = Categorical(logits=logits)
-        if action is None:
+        if action is None and not deterministic:
             action = probs.sample()
-        if deterministic:
-            action = logits.argmax(axis=1)
+        if action is None and deterministic:
+            action = logits.argmax(axis=-1)
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
 
-def evaluate():
+def save_model(step='last'):
+    for name, agent_env in briscola_agents.items():
+        if isinstance(agent_env, nn.Module) and name != role_now_training:
+            model_save_path = os.path.join(log_path, f'{name}_policy_{step}_during_{role_now_training}.pth')
+            torch.save(agent_env.state_dict(), model_save_path)
+            if args.track:
+                artifact = wandb.Artifact(f'{name}_policy_best_during_{role_now_training}', type='model')
+                artifact.add_file(model_save_path)
+                run.log_artifact(artifact)
+    model_save_path = os.path.join(log_path, f'{role_now_training}_policy_{step}_during_{role_now_training}.pth')
+    torch.save(agent.state_dict(), model_save_path)
+    if args.track:
+        artifact = wandb.Artifact(f'{role_now_training}_policy_{step}_during_{role_now_training}', type='model')
+        artifact.add_file(model_save_path)
+        run.log_artifact(artifact)
+
+best_bad = 0
+best_good = 0
+def evaluate(save=False):
     env = gym.vector.SyncVectorEnv(
-        [make_env(args.seed+(args.num_generations*args.num_envs), role_now_training, briscola_agents)
+        [make_env(args.seed+(args.num_generations*args.num_envs)+i, role_now_training, briscola_agents, deterministic_eval=True)
          for i in range(args.num_test_games)]
     )
     data, _ = env.reset()
@@ -161,34 +186,51 @@ def evaluate():
         data, reward, done, _, info = env.step(action.cpu().numpy())
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
+    metric = None
     if role_now_training in ['caller', 'callee']:
         writer.add_scalar("test/reward_bad_team_mean", reward.mean(), global_step)
         writer.add_scalar("test/reward_bad_team_std", reward.std(), global_step)
         writer.add_scalar("test/reward_good_team_mean", (120.0 - reward).mean(), global_step)
         writer.add_scalar("test/reward_good_team_std", (120.0 - reward).std(), global_step)
+        metric = reward.mean()
+        global best_good
+        if metric > best_good and save:
+            save_model(step='best')
+            best_good = metric
     else:
         writer.add_scalar("test/reward_good_team_mean", reward.mean(), global_step)
         writer.add_scalar("test/reward_good_team_std", reward.std(), global_step)
         writer.add_scalar("test/reward_bad_team_mean", (120.0 - reward).mean(), global_step)
         writer.add_scalar("test/reward_bad_team_std", (120.0 - reward).std(), global_step)
+        metric = (120.0 - reward).mean()
+        global best_bad
+        if metric > best_bad and save:
+            save_model(step='best')
+            best_bad = metric
+    return metric
 
 
 if __name__ == "__main__":
     args = parse_args()
     run_name = f"{args.exp_name}__{args.seed}__{int(time.time())}"
+    log_path = os.path.join(args.logdir, run_name)
+    os.makedirs(log_path, exist_ok=True)
+  
     if args.track:
         import wandb
 
-        wandb.init(
+        run = wandb.init(
             project=args.wandb_project_name,
             entity=args.wandb_entity,
             sync_tensorboard=True,
             config=vars(args),
             name=run_name,
             monitor_gym=True,
-            save_code=True,
-            tensorboard=True
+            save_code=True
         )
+        wandb.define_metric("test/reward_good_team_mean", summary="max")
+        wandb.define_metric("test/reward_bad_team_mean", summary="max")
+
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
@@ -205,6 +247,13 @@ if __name__ == "__main__":
     device = torch.device(
         "cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
+    dummy_envs = gym.vector.SyncVectorEnv(
+        [make_env(args.seed + i, 'caller', {})
+         for i in range(args.num_envs)]
+    )
+    assert isinstance(dummy_envs.single_action_space,
+                      gym.spaces.Discrete), "only discrete action space is supported"
+    
     # env setup
     if args.briscola_train_mode == 'solo':
         role_now_training = args.briscola_roles_train
@@ -215,23 +264,57 @@ if __name__ == "__main__":
             briscola_agents['caller'] = HeuristicAgent()
         if args.briscola_callee_heuristic:
             briscola_agents['callee'] = HeuristicAgent()
+        agent = Agent(dummy_envs).to(device)
 
-    dummy_envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, role_now_training, briscola_agents)
-         for i in range(args.num_envs)]
-    )
-    assert isinstance(dummy_envs.single_action_space,
-                      gym.spaces.Discrete), "only discrete action space is supported"
+    elif args.briscola_train_mode == 'bad_multiple_networks':
+        args.num_generations = args.num_generations*len(args.briscola_roles_train)
+        role_now_training = 'caller'
+        briscola_agents = {'caller': 'random', 'callee': 'random',  'good_1': 'random',
+                           'good_2': 'random', 'good_3': 'random'}
 
-    agent = Agent(dummy_envs).to(device)
+        agent_caller = Agent(dummy_envs).to(device)
+        agent_callee = Agent(dummy_envs).to(device)
+        agent_caller.eval()
+        agent_callee.eval()
+        agent = agent_caller
+        briscola_agents['caller'] = agent_caller
 
+    elif args.briscola_train_mode == 'bad_single_network':
+        args.num_generations = args.num_generations*len(args.briscola_roles_train)
+        role_now_training = 'caller'
+        briscola_agents = {'caller': 'random', 'callee': 'random',  'good_1': 'random',
+                           'good_2': 'random', 'good_3': 'random'}
+
+        agent = Agent(dummy_envs).to(device)
+        agent_old = Agent(dummy_envs).to(device)
+        agent.eval()
+        agent_old.eval()
+        briscola_agents['caller'] = agent
+
+    id_log_model_training = 0
+    global_step = 0
     for ngen in range(args.num_generations):
+        if args.briscola_train_mode != 'solo':
+            role_now_training = args.briscola_roles_train[ngen%len(args.briscola_roles_train)]
+        print(f'Now training {role_now_training}')
+        if ngen > 0:
+            id_log_model_training = ngen%len(args.briscola_roles_train)
+            if ngen == 1 and args.briscola_train_mode == 'bad_multiple_networks':
+                briscola_agents['callee'] = agent_callee
+            if args.briscola_train_mode == 'bad_single_network':
+                if ngen == 1:
+                    briscola_agents['caller'] = agent_old
+                    briscola_agents['callee'] = agent_old
+                agent_old.load_state_dict(agent.state_dict())
+                agent_old.eval()
+
+
         # Seed is incremented at each generations
         envs = gym.vector.SyncVectorEnv(
             [make_env(args.seed + i + args.num_envs*ngen, role_now_training, briscola_agents)
              for i in range(args.num_envs)]
         )
-
+     
         optimizer = optim.Adam(
             agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
@@ -248,7 +331,6 @@ if __name__ == "__main__":
         values = torch.zeros((args.num_steps, args.num_envs)).to(device)
 
         # TRY NOT TO MODIFY: start the game
-        global_step = 0
         start_time = time.time()
         data, _ = envs.reset()
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
@@ -322,6 +404,7 @@ if __name__ == "__main__":
             b_values = values.reshape(-1)
 
             # Optimizing the policy and value network
+            agent.train()
             b_inds = np.arange(args.batch_size)
             clipfracs = []
             for epoch in range(args.update_epochs):
@@ -383,7 +466,7 @@ if __name__ == "__main__":
                 if args.target_kl is not None:
                     if approx_kl > args.target_kl:
                         break
-
+            agent.eval()
             y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
             var_y = np.var(y_true)
             explained_var = np.nan if var_y == 0 else 1 - \
@@ -408,34 +491,15 @@ if __name__ == "__main__":
             print("SPS:", int(global_step / (time.time() - start_time)))
             writer.add_scalar("charts/SPS", int(global_step /
                                                 (time.time() - start_time)), global_step)
+            writer.add_scalar("charts/training_model", id_log_model_training)
 
             if update % args.freq_eval_test == 0:
-                evaluate()
+                evaluate(save=True)
         # End generation
 
     if num_updates % args.freq_eval_test > 0:
-        evaluate()
+        evaluate(save=True)
 
+    save_model()
     envs.close()
     writer.close()
-
-    env = gym.vector.SyncVectorEnv(
-        [make_env(args.seed+5, True)]
-    )
-    data, _ = env.reset()
-    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
-        data['action_mask'], dtype=torch.bool, device=device)
-    # Print trajectory
-    for step in range(0, args.num_steps):
-
-        # ALGO LOGIC: action logic
-        with torch.no_grad():
-            action, logprob, _, value = agent.get_action_and_value(
-                next_obs, next_mask)
-            values[step] = value.flatten()
-
-        # TRY NOT TO MODIFY: execute the game and log data.
-        data, reward, done, _, info = env.step(action.cpu().numpy())
-        next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
-            data['action_mask'], dtype=torch.bool, device=device)
-    print(reward)

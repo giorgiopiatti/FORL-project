@@ -2,6 +2,8 @@
 from copy import deepcopy
 import numpy as np
 import functools
+
+import torch
 from agents.heuristic_agent import HeuristicAgent
 
 from environment.briscola_base.card import NULLCARD_VECTOR, Card
@@ -80,7 +82,8 @@ class BriscolaEnv(gym.Env):
 
     def __init__(self, render_mode=None, role='caller',
                  normalize_reward=True, save_raw_state=False, heuristic_ids=[],
-                 agents={'callee': 'random',  'good_1': 'random', 'good_2': 'random', 'good_3': 'random'}):
+                 agents={'callee': 'random',  'good_1': 'random', 'good_2': 'random', 'good_3': 'random'}, 
+                 deterministic_eval=False, device='cpu'):
 
         self.name = 'briscola_5'
         self.game = Game(print_game=(render_mode == 'terminal_env'))
@@ -91,7 +94,8 @@ class BriscolaEnv(gym.Env):
         self.use_role_ids = True
         self.role = role
         self.agents = agents
-
+        self.deterministic_eval = deterministic_eval
+        self.device = device
         self.num_actions = 40
         self.action_space = spaces.Discrete(40)
 
@@ -162,8 +166,13 @@ class BriscolaEnv(gym.Env):
         while player_id != self._player_id and not self.game.is_over():
             current_role = self._int_to_name(player_id)
             if isinstance(self.agents[current_role], nn.Module):
-                action = self.agents[current_role].get_action_and_value(
-                    x=self._get_obs(player_id))  # NOTE need to be tested
+                x = self._get_obs(player_id)
+                with torch.no_grad():
+                    action_t, _, _, _ = self.agents[current_role].get_action_and_value(
+                        torch.tensor(x['observation'], dtype=torch.float, device=self.device), 
+                        torch.tensor(x['action_mask'], dtype=torch.bool, device=self.device), 
+                        deterministic=self.deterministic_eval)
+                action = PlayCardAction.from_action_id(action_t.cpu().numpy().item())
             elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random':
                 action = state.actions[self.np_random.choice(
                     len(state.actions), size=1)[0]]
