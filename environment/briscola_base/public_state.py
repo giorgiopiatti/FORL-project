@@ -1,6 +1,6 @@
-from enviroment.briscola_gym.card import Card
+from environment.briscola_base.card import Card
 from typing import List, Tuple
-from enviroment.briscola_gym.round import BriscolaRound
+from environment.briscola_base.round import BriscolaRound
 
 
 class BriscolaPublicState:
@@ -24,7 +24,7 @@ class BriscolaPublicState:
         self.trace = []
         self.trace_round = []
         self.points = [0, 0, 0, 0, 0]
-        self.called_card_player=-1
+        self.called_card_player = -1
 
     def update_state_on_round_end(self, points):
         self.trace.append(self.trace_round)
@@ -34,6 +34,6 @@ class BriscolaPublicState:
     def update_state_on_round_step(self, round: BriscolaRound):
         self.trace_round = round.trace
 
-        for (player, card) in round.trace: 
+        for (player, card) in round.trace:
             if (card.card == self.called_card):
                 self.called_card_player = player.player_id

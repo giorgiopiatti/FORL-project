@@ -211,6 +211,14 @@
             "program": "${workspaceFolder}/ppo.py",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+            "name": "dqn",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/dqn.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }

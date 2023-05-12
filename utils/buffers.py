@@ -1,6 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, Generator, List, NamedTuple, Optional, Union
 
 import numpy as np
 import torch as th
@@ -10,7 +10,6 @@ from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape
 from stable_baselines3.common.type_aliases import (
     DictReplayBufferSamples,
     DictRolloutBufferSamples,
-    ReplayBufferSamples,
     RolloutBufferSamples,
 )
 from stable_baselines3.common.utils import get_device
@@ -22,6 +21,16 @@ try:
 except ImportError:
     psutil = None
 
+
+class ReplayBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions_mask: th.Tensor
+    actions: th.Tensor
+    next_observations: th.Tensor
+    next_actions_mask: th.Tensor
+    dones: th.Tensor
+    rewards: th.Tensor
+    
 
 class BaseBuffer(ABC):
     """
@@ -175,6 +184,7 @@ class ReplayBuffer(BaseBuffer):
         self,
         buffer_size: int,
         observation_space: spaces.Space,
+        actions_mask_space: spaces.Space,
         action_space: spaces.Space,
         device: Union[th.device, str] = "auto",
         n_envs: int = 1,
@@ -201,6 +211,10 @@ class ReplayBuffer(BaseBuffer):
 
         self.observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=observation_space.dtype)
 
+        self.action_mask_shape = get_obs_shape(actions_mask_space)
+        self.actions_mask = np.zeros((self.buffer_size, self.n_envs, *self.action_mask_shape), dtype=actions_mask_space.dtype)
+        self.next_actions_mask = np.zeros((self.buffer_size, self.n_envs, *self.action_mask_shape), dtype=actions_mask_space.dtype)
+
         if optimize_memory_usage:
             # `observations` contains also the next observation
             self.next_observations = None
@@ -217,7 +231,7 @@ class ReplayBuffer(BaseBuffer):
         self.timeouts = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
 
         if psutil is not None:
-            total_memory_usage = self.observations.nbytes + self.actions.nbytes + self.rewards.nbytes + self.dones.nbytes
+            total_memory_usage = self.observations.nbytes + self.actions.nbytes + self.rewards.nbytes + self.dones.nbytes + self.actions_mask.nbytes + self.next_actions_mask.nbytes
 
             if self.next_observations is not None:
                 total_memory_usage += self.next_observations.nbytes
@@ -234,7 +248,9 @@ class ReplayBuffer(BaseBuffer):
     def add(
         self,
         obs: np.ndarray,
+        actions_mask: np.ndarray,
         next_obs: np.ndarray,
+        next_actions_mask: np.ndarray,
         action: np.ndarray,
         reward: np.ndarray,
         done: np.ndarray,
@@ -249,6 +265,9 @@ class ReplayBuffer(BaseBuffer):
         # Reshape to handle multi-dim and discrete action spaces, see GH #970 #1392
         action = action.reshape((self.n_envs, self.action_dim))
 
+        actions_mask = actions_mask.reshape((self.n_envs, *self.action_mask_shape))
+        next_actions_mask = next_actions_mask.reshape((self.n_envs, *self.action_mask_shape))
+
         # Copy to avoid modification by reference
         self.observations[self.pos] = np.array(obs).copy()
 
@@ -260,6 +279,8 @@ class ReplayBuffer(BaseBuffer):
         self.actions[self.pos] = np.array(action).copy()
         self.rewards[self.pos] = np.array(reward).copy()
         self.dones[self.pos] = np.array(done).copy()
+        self.actions_mask[self.pos] = np.array(actions_mask).copy()
+        self.next_actions_mask[self.pos] = np.array(next_actions_mask).copy()
 
         if self.handle_timeout_termination:
             self.timeouts[self.pos] = np.array([info.get("TimeLimit.truncated", False) for info in infos])
@@ -302,8 +323,10 @@ class ReplayBuffer(BaseBuffer):
 
         data = (
             self._normalize_obs(self.observations[batch_inds, env_indices, :], env),
+            self.actions_mask[batch_inds, env_indices, :],
             self.actions[batch_inds, env_indices, :],
             next_obs,
+            self.next_actions_mask[batch_inds, env_indices, :],
             # Only use dones that are not due to timeouts
             # deactivated by default (timeouts is initialized as an array of False)
             (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1),

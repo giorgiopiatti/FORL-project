@@ -1,4 +1,4 @@
-from enviroment.briscola_gym.card import Card
+from environment.briscola_base.card import Card
 
 from abc import (
     ABC,

@@ -6,11 +6,11 @@ import numpy as np
 from tianshou.data import Batch
 from tianshou.policy import BasePolicy
 from tianshou.utils import MultipleLRSchedulers
-from enviroment.briscola_gym.actions import PLAY_ACTION_STR_TO_ID 
-from enviroment.briscola_gym.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
-from enviroment.briscola_gym.card import Card
+from environment.briscola_base.actions import PLAY_ACTION_STR_TO_ID 
+from environment.briscola_base.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
+from environment.briscola_base.card import Card
 import torch 
-from enviroment.briscola_gym.utils import Roles
+from environment.briscola_base.utils import Roles
 
 rank_list = ['A', '2', '3', '4', '5', '6', '7', 'J', 'Q', 'K']
 suit_list = ['S', 'C', 'D', 'H']

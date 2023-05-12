@@ -3,20 +3,20 @@ from copy import deepcopy
 import numpy as np
 import functools
 
-from enviroment.briscola_gym.card import NULLCARD_VECTOR, Card
+from environment.briscola_base.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
-from enviroment.briscola_gym.player_state import BriscolaPlayerState
-from enviroment.briscola_gym.actions import BriscolaAction, PlayCardAction, PLAY_ACTION_STR_TO_ID
+from environment.briscola_base.player_state import BriscolaPlayerState
+from environment.briscola_base.actions import BriscolaAction, PlayCardAction, PLAY_ACTION_STR_TO_ID
 from gymnasium.utils import seeding
-from enviroment.briscola_gym import Game
+from environment.briscola_base import Game
 
 import gymnasium as gym
 from gymnasium.spaces import Discrete
 from gymnasium import spaces
-from enviroment.briscola_gym.utils import Roles
+from environment.briscola_base.utils import Roles
 import torch.nn as nn
 
-from enviroment.briscola_gym.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
+from environment.briscola_base.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
 
 
 def one_hot(a, shape):
@@ -25,12 +25,14 @@ def one_hot(a, shape):
         b[el] = 1
     return b
 
+
 DICT_SUIT_TO_INT = {
-    'C':0,
-    'D':1,
-    'H':2,
-    'S':3
+    'C': 0,
+    'D': 1,
+    'H': 2,
+    'S': 3
 }
+
 
 def wins(card1, card2, index1, index2, briscola_suit):
     winner_card = card1
@@ -46,6 +48,7 @@ def wins(card1, card2, index1, index2, briscola_suit):
             winner_index = index2
     return winner_card, winner_index
 
+
 def winning(trace_round, briscola_suit):
     if trace_round == []:
         return None, None
@@ -53,13 +56,14 @@ def winning(trace_round, briscola_suit):
         winning_player_obj, winning_action = trace_round[0]
         winning_player = winning_player_obj.player_id
         winning_card = winning_action.card
-        for i, (player, action) in enumerate (trace_round):
+        for i, (player, action) in enumerate(trace_round):
             player_id = player.player_id
             current_card = action.card
 
             if (i >= 1):
-                winning_card, winning_player= wins(winning_card, current_card, winning_player, player_id, briscola_suit)
-    
+                winning_card, winning_player = wins(
+                    winning_card, current_card, winning_player, player_id, briscola_suit)
+
         return winning_card, winning_player
 
 
@@ -74,11 +78,11 @@ class BriscolaEnv(gym.Env):
     '''
 
     def __init__(self, render_mode=None, role='caller',
-                 normalize_reward=True, save_raw_state = False, heuristic_ids = [],
-                 agents= {'callee': 'random',  'good_1': 'random', 'good_2': 'random' , 'good_3': 'random'} ):
+                 normalize_reward=True, save_raw_state=False, heuristic_ids=[],
+                 agents={'callee': 'random',  'good_1': 'random', 'good_2': 'random', 'good_3': 'random'}):
 
         self.name = 'briscola_5'
-        self.game = Game(print_game=(render_mode=='terminal_env'))
+        self.game = Game(print_game=(render_mode == 'terminal_env'))
         self.screen = None
         self.normalize_reward = normalize_reward
         self.save_raw_state = save_raw_state
@@ -103,21 +107,21 @@ class BriscolaEnv(gym.Env):
         round_space = spaces.Tuple([played_card_space]*5)
         # 0 is used for padding
 
-        self._raw_observation_space =  spaces.Dict({
-                            'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-                            'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
-                            'player_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-                            'briscola_suit': spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
-                            'belief': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-                            'current_hand': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-                            'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-                            'trace_round': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-                            'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-                            'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-                            'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
-                            'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-                            'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
-                        })
+        self._raw_observation_space = spaces.Dict({
+            'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+            'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
+            'player_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+            'briscola_suit': spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
+            'belief': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+            'current_hand': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+            'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+            'trace_round': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+            'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+            'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+            'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+            'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+            'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
+        })
         self.observation_space = spaces.Dict(
             {
                 "observation": spaces.Box(low=0, high=1, shape=(spaces.flatdim(self._raw_observation_space),), dtype=np.int8),
@@ -129,7 +133,6 @@ class BriscolaEnv(gym.Env):
 
         self.observation_shape = spaces.flatdim(self._raw_observation_space)
         self.render_mode = render_mode
-
 
     def render(self):
         """
@@ -153,15 +156,16 @@ class BriscolaEnv(gym.Env):
         user is no longer using the environment.
         """
         pass
-    
 
     def _play_until_is_me(self, state, player_id):
         while player_id != self._player_id and not self.game.is_over():
             current_role = self._int_to_name(player_id)
             if isinstance(self.agents[current_role], nn.Module):
-                action = self.agents[current_role].get_action_and_value(x=self._get_obs(player_id)) #NOTE need to be tested
+                action = self.agents[current_role].get_action_and_value(
+                    x=self._get_obs(player_id))  # NOTE need to be tested
             elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random':
-                action =  state.actions[self.np_random.choice(len(state.actions), size=1)[0]]
+                action = state.actions[self.np_random.choice(
+                    len(state.actions), size=1)[0]]
             else:
                 raise ValueError(f'self.agents[{current_role}] is invalid')
             state, player_id = self.game.step(action)
@@ -172,15 +176,15 @@ class BriscolaEnv(gym.Env):
 
         self._construct_int_name_mappings(
             self.game.caller_id, self.game.callee_id)
-       
+
         self._player_id = self._name_to_int(self.role)
-        
+
         # Play until ist my first turn to play a card
         state = self._play_until_is_me(state, player_id)
 
         observation = self._get_obs(self._player_id)
         info = self._get_info()
-       
+
         return observation, info
 
     def _get_obs(self, player_id):
@@ -206,14 +210,13 @@ class BriscolaEnv(gym.Env):
         reward = np.array([0.0])
         if self.game.is_over():
             terminated = True
-            reward =  self._scale_rewards(self._get_payoffs())[self._player_id]
-        
+            reward = self._scale_rewards(self._get_payoffs())[self._player_id]
+
         observation = self._get_obs(self._player_id)
         info = self._get_info()
 
         self.render()
         return observation, reward, terminated, False, info
-     
 
     def _extract_state(self, state: BriscolaPlayerState):
         ''' Encode state:
@@ -239,7 +242,7 @@ class BriscolaEnv(gym.Env):
         flattened_trace = [item for round in state.trace for item in round]
 
         points_in_round = 0
-        for i, (prev_player, prev_card) in enumerate (state.trace_round):
+        for i, (prev_player, prev_card) in enumerate(state.trace_round):
             points_in_round += CARD_POINTS[prev_card.card.rank]
 
         encoding = dict(
@@ -247,17 +250,23 @@ class BriscolaEnv(gym.Env):
             role=one_hot([state.role.value-1], shape=3),
             player_id=one_hot([state.player_id], shape=5),
             briscola_suit=one_hot([DICT_SUIT_TO_INT[briscola_suit]], shape=4),
-            belief= one_hot([], shape=5) if state.called_card_player == -1 else one_hot([state.called_card_player], shape=5),
-            current_hand=one_hot([PLAY_ACTION_STR_TO_ID[card.rank + card.suit] for card in state.current_hand], shape=40),
-            played_cards=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit] for _, card in flattened_trace], shape=40),
-            trace_round=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit] for _, card in state.trace_round], shape=40),
-            winning_card= one_hot([], shape=40) if wc is None else one_hot([PLAY_ACTION_STR_TO_ID[wc.rank + wc.suit]], shape=40),
-            winning_player=one_hot([], shape=5) if wp is None else one_hot([wp], shape=5),
+            belief=one_hot([], shape=5) if state.called_card_player == -
+            1 else one_hot([state.called_card_player], shape=5),
+            current_hand=one_hot([PLAY_ACTION_STR_TO_ID[card.rank + card.suit]
+                                 for card in state.current_hand], shape=40),
+            played_cards=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit]
+                                 for _, card in flattened_trace], shape=40),
+            trace_round=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit]
+                                for _, card in state.trace_round], shape=40),
+            winning_card=one_hot([], shape=40) if wc is None else one_hot(
+                [PLAY_ACTION_STR_TO_ID[wc.rank + wc.suit]], shape=40),
+            winning_player=one_hot(
+                [], shape=5) if wp is None else one_hot([wp], shape=5),
             round_points=points_in_round/120,
             position=one_hot([len(state.trace_round)], shape=5),
             is_last=len(state.trace_round) == 4,
         )
-        #return encoding
+        # return encoding
         return spaces.utils.flatten(self._raw_observation_space, encoding)
 
     def _get_payoffs(self):
@@ -330,6 +339,7 @@ class BriscolaEnv(gym.Env):
     def seed(self, seed):
         self.np_random, seed = seeding.np_random(seed)
         self.game.seed(seed=seed)
+
 
 def _cards2array(cards: List[Card]):
     matrix = []

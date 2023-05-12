@@ -2,9 +2,10 @@
 '''
 import numpy as np
 
-from enviroment.briscola_gym.utils import CARD_RANK_WITHIN_SUIT_INDEX, CARD_POINTS
+from environment.briscola_base.utils import CARD_RANK_WITHIN_SUIT_INDEX, CARD_POINTS
 
-NULLCARD_VECTOR = np.array((0,0,0))
+NULLCARD_VECTOR = np.array((0, 0, 0))
+
 
 class Card:
     '''
@@ -82,6 +83,6 @@ class Card:
             return CARD_RANK_WITHIN_SUIT_INDEX[self.rank] < CARD_RANK_WITHIN_SUIT_INDEX[other.rank]
         else:
             return self.suit < other.suit
-    
+
     def vector(self) -> tuple:
         return np.array([self.get_index_rank(), self.get_index_suit(), self.points])

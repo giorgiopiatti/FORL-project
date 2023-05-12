@@ -8,7 +8,7 @@ Department of Computer Science, ETH Zurich, Switzerland
 ## Overview
 
 ```
-/enviroment                    -- PettingZoo enviroment of Briscola 5
+/environment                    -- PettingZoo environment of Briscola 5
 
 ```
 

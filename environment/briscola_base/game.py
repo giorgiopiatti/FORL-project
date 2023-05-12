@@ -3,14 +3,14 @@
 import functools
 from heapq import merge
 import numpy as np
-from enviroment.briscola_gym.dealer import BriscolaDealer
-from enviroment.briscola_gym.public_state import BriscolaPublicState
+from environment.briscola_base.dealer import BriscolaDealer
+from environment.briscola_base.public_state import BriscolaPublicState
 
-from enviroment.briscola_gym.utils import CARD_RANK_WITHIN_SUIT, Roles, DEBUG_ENV
-from enviroment.briscola_gym.player import BriscolaPlayer
-from enviroment.briscola_gym.round import BriscolaRound
-from enviroment.briscola_gym.judger import BriscolaJudger
-from enviroment.briscola_gym.card import Card
+from environment.briscola_base.utils import CARD_RANK_WITHIN_SUIT, Roles, DEBUG_ENV
+from environment.briscola_base.player import BriscolaPlayer
+from environment.briscola_base.round import BriscolaRound
+from environment.briscola_base.judger import BriscolaJudger
+from environment.briscola_base.card import Card
 from typing import List, Tuple
 
 
@@ -19,7 +19,7 @@ class BriscolaGame:
     information.
     '''
 
-    def __init__(self, allow_step_back=False, print_game = False):
+    def __init__(self, allow_step_back=False, print_game=False):
         self.allow_step_back = allow_step_back
         self.np_random = np.random.RandomState()
         self.num_players = 5
@@ -123,7 +123,7 @@ class BriscolaGame:
         ''' Perform one draw of the game
 
         Args:
-            action (str): specific action of briscola_gym. Eg: '33344'
+            action (str): specific action of briscola_base. Eg: '33344'
 
         Returns:
             dict: next player's state

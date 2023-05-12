@@ -1,6 +1,6 @@
 import functools
 
-from enviroment.briscola_gym.card import Card
+from environment.briscola_base.card import Card
 
 
 def init_40_deck():

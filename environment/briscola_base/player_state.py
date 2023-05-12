@@ -1,7 +1,7 @@
 from typing import List, Tuple
-from enviroment.briscola_gym.card import Card
-from enviroment.briscola_gym.actions import BriscolaAction
-from enviroment.briscola_gym.public_state import BriscolaPublicState
+from environment.briscola_base.card import Card
+from environment.briscola_base.actions import BriscolaAction
+from environment.briscola_base.public_state import BriscolaPublicState
 
 
 class BriscolaPlayerState:
@@ -47,18 +47,18 @@ class BriscolaPlayerState:
 
     def get_full_info(self):
         result = {
-            'caller_id' : self.caller_id,
-            'caller_points_bet' : self.caller_points_bet,
-            'called_card' : self.called_card,
-            'trace' : self.trace,
-            'trace_round' : self.trace_round,
-            'points' : self.points,
-            'called_card_player' : self.called_card_player,
+            'caller_id': self.caller_id,
+            'caller_points_bet': self.caller_points_bet,
+            'called_card': self.called_card,
+            'trace': self.trace,
+            'trace_round': self.trace_round,
+            'points': self.points,
+            'called_card_player': self.called_card_player,
 
-            'role' : self.role,
-            'player_id' : self.player_id,
-            'current_hand' : self.current_hand,
-            'other_hands' : self.other_hands,
-            'actions' : self.actions
+            'role': self.role,
+            'player_id': self.player_id,
+            'current_hand': self.current_hand,
+            'other_hands': self.other_hands,
+            'actions': self.actions
         }
         return result

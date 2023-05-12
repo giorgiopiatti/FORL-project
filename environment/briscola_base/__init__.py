@@ -1,5 +1,5 @@
-from enviroment.briscola_gym.dealer import BriscolaDealer as Dealer
-from enviroment.briscola_gym.game import BriscolaGame as Game
-from enviroment.briscola_gym.judger import BriscolaJudger as Judger
-from enviroment.briscola_gym.player import BriscolaPlayer as Player
-from enviroment.briscola_gym.round import BriscolaRound as Round
+from environment.briscola_base.dealer import BriscolaDealer as Dealer
+from environment.briscola_base.game import BriscolaGame as Game
+from environment.briscola_base.judger import BriscolaJudger as Judger
+from environment.briscola_base.player import BriscolaPlayer as Player
+from environment.briscola_base.round import BriscolaRound as Round
