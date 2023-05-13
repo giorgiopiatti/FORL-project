@@ -9,7 +9,7 @@ from agents.heuristic_agent import HeuristicAgent
 from environment.briscola_communication.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
 from environment.briscola_communication.player_state import BriscolaPlayerState
-from environment.briscola_communication.actions import BriscolaAction, PlayCardAction, PLAY_ACTION_STR_TO_ID
+from environment.briscola_communication.actions import BriscolaAction, BriscolaCommsAction, Messages, PlayCardAction, PLAY_ACTION_STR_TO_ID
 from gymnasium.utils import seeding
 from environment.briscola_communication import Game
 
@@ -83,10 +83,10 @@ class BriscolaEnv(gym.Env):
     def __init__(self, render_mode=None, role='caller',
                  normalize_reward=True, save_raw_state=False, heuristic_ids=[],
                  agents={'callee': 'random',  'good_1': 'random', 'good_2': 'random', 'good_3': 'random'}, 
-                 deterministic_eval=False, device='cpu'):
+                 deterministic_eval=False, device='cpu', communication_say_truth=False):
 
         self.name = 'briscola_5'
-        self.game = Game(print_game=(render_mode == 'terminal_env'))
+        self.game = Game(print_game=(render_mode == 'terminal_env'), communication_say_truth=communication_say_truth)
         self.screen = None
         self.normalize_reward = normalize_reward
         self.save_raw_state = save_raw_state
@@ -96,8 +96,8 @@ class BriscolaEnv(gym.Env):
         self.agents = agents
         self.deterministic_eval = deterministic_eval
         self.device = device
-        self.num_actions = 40
-        self.action_space = spaces.Discrete(40)
+        self.num_actions = 40 + 10
+        self.action_space = spaces.Discrete(self.num_actions)
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
         # (value, seed, points)
@@ -125,7 +125,8 @@ class BriscolaEnv(gym.Env):
             'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
             'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-            'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
+            'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+            'comms_round': spaces.Box(low=-1, high=1, shape=(5*5,), dtype=np.int8)
         })
         self.observation_space = spaces.Dict(
             {
@@ -162,7 +163,7 @@ class BriscolaEnv(gym.Env):
         """
         pass
 
-    def _play_until_is_me(self, state, player_id):
+    def _play_until_is_me(self, state: BriscolaPlayerState, player_id):
         while player_id != self._player_id and not self.game.is_over():
             current_role = self._int_to_name(player_id)
             if isinstance(self.agents[current_role], nn.Module):
@@ -172,13 +173,19 @@ class BriscolaEnv(gym.Env):
                         torch.tensor(x['observation'], dtype=torch.float, device=self.device), 
                         torch.tensor(x['action_mask'], dtype=torch.bool, device=self.device), 
                         deterministic=self.deterministic_eval)
-                action = PlayCardAction.from_action_id(action_t.cpu().numpy().item())
+                action = self._decode_action(action_t.cpu().numpy().item())
             elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random':
-                action = state.actions[self.np_random.choice(
-                    len(state.actions), size=1)[0]]
-            elif isinstance(self.agents[current_role], HeuristicAgent):
-                action = self.agents[current_role].get_heuristic_action(
-                    state, [a.to_action_id() for a in state.actions])
+                if state.actions_all_coms is None:
+                    action = state.actions[self.np_random.choice(
+                        len(state.actions), size=1)[0]]
+                else:
+                    action = state.actions_all_coms[self.np_random.choice(
+                        len(state.actions_all_coms), size=1)[0]]
+                # All coms allows to choose between saying truth and lie
+
+            # elif isinstance(self.agents[current_role], HeuristicAgent):
+            #     action = self.agents[current_role].get_heuristic_action(
+            #         state, [a.to_action_id() for a in state.actions])
             else:
                 raise ValueError(f'self.agents[{current_role}] is invalid')
             state, player_id = self.game.step(action)
@@ -258,6 +265,30 @@ class BriscolaEnv(gym.Env):
         for i, (prev_player, prev_card) in enumerate(state.trace_round):
             points_in_round += CARD_POINTS[prev_card.card.rank]
 
+        comms = np.zeros((5*5, ))
+        for (player, comm) in state.comms_round:
+            is_valid = False
+            if comm.message == Messages.CARICO_NOT_BRISCOLA:
+                for c in player.current_hand:
+                    is_valid = is_valid or (c.rank in ['A', '3'] and c.suit != briscola_suit) 
+            elif comm.message == Messages.BRISCOLINO:
+                for c in player.current_hand:
+                    is_valid = is_valid or (c.rank in ['2', '4', '5', '6', '7'] and c.suit == briscola_suit) 
+            elif comm.message == Messages.BRISCOLA_FIGURA:
+                for c in player.current_hand:
+                    is_valid = is_valid or (c.rank in ['K', 'Q', 'J'] and c.suit == briscola_suit) 
+            elif comm.message == Messages.BRISCOLA_CARICO:
+                for c in player.current_hand:
+                    is_valid = is_valid or (c.rank in ['A', '3'] and c.suit == briscola_suit) 
+            elif comm.message == Messages.LISCIO:
+                for c in player.current_hand:
+                    is_valid = is_valid or (c.rank in ['2', '4', '5', '6', '7'] and c.suit != briscola_suit) 
+
+            if (is_valid and comm.truth) or (not is_valid and not comm.truth):
+                comms[player.player_id*5 + comm.message.value] = 1
+            else:
+                comms[player.player_id*5 + comm.message.value] = -1
+
         encoding = dict(
             caller_id=one_hot([state.caller_id], shape=5),
             role=one_hot([state.role.value-1], shape=3),
@@ -278,6 +309,7 @@ class BriscolaEnv(gym.Env):
             round_points=points_in_round/120,
             position=one_hot([len(state.trace_round)], shape=5),
             is_last=len(state.trace_round) == 4,
+            comms_round=comms
         )
         # return encoding
         return spaces.utils.flatten(self._raw_observation_space, encoding)
@@ -301,6 +333,8 @@ class BriscolaEnv(gym.Env):
         '''
         if action_id < 40:
             return PlayCardAction.from_action_id(action_id)
+        else:
+            return BriscolaCommsAction.from_action_id(action_id)
 
     def _get_legal_actions(self, state: BriscolaPlayerState):
         ''' Get all legal actions for current state

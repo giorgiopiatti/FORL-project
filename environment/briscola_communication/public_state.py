@@ -1,3 +1,4 @@
+from environment.briscola_communication.actions import BriscolaCommsAction
 from environment.briscola_communication.card import Card
 from typing import List, Tuple
 from environment.briscola_communication.round import BriscolaRound
@@ -17,6 +18,8 @@ class BriscolaPublicState:
 
     called_card_player: int
 
+    comms_round:  List[Tuple[int, BriscolaCommsAction]]
+
     def __init__(self, caller_id, caller_points_bet, called_card) -> None:
         self.caller_points_bet = caller_points_bet
         self.caller_id = caller_id
@@ -25,10 +28,12 @@ class BriscolaPublicState:
         self.trace_round = []
         self.points = [0, 0, 0, 0, 0]
         self.called_card_player = -1
+        self.comms_round = []
 
     def update_state_on_round_end(self, points):
         self.trace.append(self.trace_round)
         self.trace_round = []
+        self.comms_round = []
         self.points = points
 
     def update_state_on_round_step(self, round: BriscolaRound):
@@ -37,3 +42,6 @@ class BriscolaPublicState:
         for (player, card) in round.trace:
             if (card.card == self.called_card):
                 self.called_card_player = player.player_id
+
+    def register_comms(self, comms):
+        self.comms_round = comms

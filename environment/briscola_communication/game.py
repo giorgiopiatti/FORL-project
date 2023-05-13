@@ -3,6 +3,7 @@
 import functools
 from heapq import merge
 import numpy as np
+from environment.briscola_communication.actions import BriscolaCommsAction, Messages
 from environment.briscola_communication.dealer import BriscolaDealer
 from environment.briscola_communication.public_state import BriscolaPublicState
 
@@ -19,11 +20,12 @@ class BriscolaGame:
     information.
     '''
 
-    def __init__(self, allow_step_back=False, print_game=False):
+    def __init__(self, allow_step_back=False, print_game=False, communication_say_truth=False):
         self.allow_step_back = allow_step_back
         self.np_random = np.random.RandomState()
         self.num_players = 5
         self.print_game = print_game
+        self.communication_say_truth = communication_say_truth
 
     def init_game(self):
         ''' Initialize players and state.
@@ -120,37 +122,37 @@ class BriscolaGame:
         raise Exception("Called card not found!")
 
     def step(self, action):
-        ''' Perform one draw of the game
-
-        Args:
-            action (str): specific action of briscola_base. Eg: '33344'
-
-        Returns:
-            dict: next player's state
-            int: next player's id
-        '''
-        if self.allow_step_back:
-            # TODO: don't record game.round, game.players, game.judger if allow_step_back not set
-            pass
-
-        player = self.players[self.round.current_player]
-        player.play(action)
-        if self.print_game:
-            print(f'Player {player.player_id} -> {action.card}')
-
-        self.round.proceed_round(player, action)
-        self.round.update_current_player()
-        self.public.update_state_on_round_step(self.round)
-
-        # get next state
-        if self.round.round_ended:
-            # NOTE Debug
+        
+        if self.round.communication_phase:
+            player = self.players[self.round.current_player]
             if self.print_game:
-                print('----- Round END ----')
-            winner, points = self.round.end_round()
-            self.round = BriscolaRound(winner, self.briscola_suit)
-            self.judger.points[winner] += points
-            self.public.update_state_on_round_end(self.judger.points)
+                print(f'Player {player.player_id} -> {action.message} saying {action.truth}')
+
+            self.round.register_comm(player, action)
+            self.round.update_current_player_comm()
+
+            if not self.round.communication_phase:
+                self.public.register_comms(self.round.comms)
+
+        else:
+            player = self.players[self.round.current_player]
+            player.play(action)
+            if self.print_game:
+                print(f'Player {player.player_id} -> {action.card}')
+
+            self.round.proceed_round(player, action)
+            self.round.update_current_player()
+            self.public.update_state_on_round_step(self.round)
+
+            # get next state
+            if self.round.round_ended:
+                # NOTE Debug
+                if self.print_game:
+                    print('----- Round END ----')
+                winner, points = self.round.end_round()
+                self.round = BriscolaRound(winner, self.briscola_suit)
+                self.judger.points[winner] += points
+                self.public.update_state_on_round_end(self.judger.points)
 
         state = self.get_state(self.round.current_player)
         self.state = state
@@ -181,7 +183,16 @@ class BriscolaGame:
         player = self.players[player_id]
         other_hands = self._get_others_current_hand(player)
 
-        state = player.get_state(self.public, other_hands)
+        if self.round.communication_phase:
+            all_actions =  [BriscolaCommsAction(truth=t, message=m) for m in Messages for t in [True, False]]
+            if self.communication_say_truth:
+                available_actions = [BriscolaCommsAction(truth=True, message=m) for m in Messages]
+            else:
+                available_actions = all_actions
+            state = player.get_state(self.public, other_hands, available_actions, all_actions)
+        else:
+            available_actions = player.available_actions_card()
+            state = player.get_state(self.public, other_hands, available_actions)
 
         return state
 

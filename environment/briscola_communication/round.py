@@ -1,7 +1,6 @@
 from environment.briscola_communication.utils import CARD_RANK_WITHIN_SUIT_INDEX
 from environment.briscola_communication.utils import CARD_POINTS
-
-
+from environment.briscola_communication.actions import BriscolaCommsAction
 class BriscolaRound:
 
     def __init__(self, starting_player, briscola_suit):
@@ -9,6 +8,8 @@ class BriscolaRound:
         self.briscola_suit = briscola_suit
         self.current_player = starting_player
         self.round_ended = False
+        self.communication_phase = True
+        self.comms = []
 
     def update_current_player(self):
         if len(self.trace) == 5:
@@ -40,3 +41,12 @@ class BriscolaRound:
             points += CARD_POINTS[c[1].card.rank]
 
         return self.trace[winner_index][0].player_id, points
+
+    def register_comm(self, player, action: BriscolaCommsAction):
+        self.comms.append((player, action))
+
+    def update_current_player_comm(self):
+        if len(self.comms) == 5:
+            self.communication_phase = False
+        else:
+            self.current_player = (self.current_player + 1) % 5

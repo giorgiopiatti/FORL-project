@@ -238,6 +238,15 @@
             "program": "${workspaceFolder}/dqn.py",
             "console": "integratedTerminal",
             "justMyCode": false
-        }
+        },
+        {
+            "name": "ppo bad_single_network comms",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com.py",
+            "console": "integratedTerminal",
+            "args": ["--freq-eval-test", "100", "--briscola-train-mode", "bad_single_network", "--total-timesteps", "8000", "--briscola-communicate" , "--num-generations" , "4"],
+            "justMyCode": false
+        },
     ]
 }

@@ -5,7 +5,6 @@ import functools
 from environment.briscola_communication.utils import cards2str
 from typing import List, Tuple
 from environment.briscola_communication.card import Card
-from environment.briscola_communication.game import BriscolaPublicState
 from environment.briscola_communication.actions import BriscolaAction, PlayCardAction
 from environment.briscola_communication.player_state import BriscolaPlayerState
 from environment.briscola_communication.utils import Roles
@@ -47,18 +46,19 @@ class BriscolaPlayer:
     def set_current_hand(self, value):
         self._current_hand = value
 
-    def get_state(self, public, other_hands):
+    def get_state(self, public, other_hands, available_actions, available_actions_all_mess=None):
         state = BriscolaPlayerState(
             public=public,
             role=self.role,
             player_id=self.player_id,
             current_hand=self._current_hand,
             other_hands=other_hands,
-            actions=self.available_actions()
+            actions=available_actions,
+            actions_all_coms=available_actions_all_mess
         )
         return state
 
-    def available_actions(self):
+    def available_actions_card(self):
         ''' Get the actions can be made based on the rules
         '''
         return [PlayCardAction(c) for c in self._current_hand]
