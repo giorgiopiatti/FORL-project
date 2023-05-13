@@ -3,14 +3,14 @@
 import functools
 from heapq import merge
 import numpy as np
-from environment.briscola_base.dealer import BriscolaDealer
-from environment.briscola_base.public_state import BriscolaPublicState
+from environment.briscola_communication.dealer import BriscolaDealer
+from environment.briscola_communication.public_state import BriscolaPublicState
 
-from environment.briscola_base.utils import CARD_RANK_WITHIN_SUIT, Roles, DEBUG_ENV
-from environment.briscola_base.player import BriscolaPlayer
-from environment.briscola_base.round import BriscolaRound
-from environment.briscola_base.judger import BriscolaJudger
-from environment.briscola_base.card import Card
+from environment.briscola_communication.utils import CARD_RANK_WITHIN_SUIT, Roles, DEBUG_ENV
+from environment.briscola_communication.player import BriscolaPlayer
+from environment.briscola_communication.round import BriscolaRound
+from environment.briscola_communication.judger import BriscolaJudger
+from environment.briscola_communication.card import Card
 from typing import List, Tuple
 
 

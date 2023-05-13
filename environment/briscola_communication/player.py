@@ -2,13 +2,13 @@
 '''
 import functools
 
-from environment.briscola_base.utils import cards2str
+from environment.briscola_communication.utils import cards2str
 from typing import List, Tuple
-from environment.briscola_base.card import Card
-from environment.briscola_base.game import BriscolaPublicState
-from environment.briscola_base.actions import BriscolaAction, PlayCardAction
-from environment.briscola_base.player_state import BriscolaPlayerState
-from environment.briscola_base.utils import Roles
+from environment.briscola_communication.card import Card
+from environment.briscola_communication.game import BriscolaPublicState
+from environment.briscola_communication.actions import BriscolaAction, PlayCardAction
+from environment.briscola_communication.player_state import BriscolaPlayerState
+from environment.briscola_communication.utils import Roles
 
 
 class BriscolaPlayer:

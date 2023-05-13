@@ -2,7 +2,7 @@
 '''
 import numpy as np
 
-from environment.briscola_base.utils import CARD_RANK_WITHIN_SUIT_INDEX, CARD_POINTS
+from environment.briscola_communication.utils import CARD_RANK_WITHIN_SUIT_INDEX, CARD_POINTS
 
 NULLCARD_VECTOR = np.array((0, 0, 0))
 

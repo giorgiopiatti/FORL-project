@@ -1,4 +1,4 @@
-from environment.briscola_base.card import Card
+from environment.briscola_communication.card import Card
 
 from abc import (
     ABC,

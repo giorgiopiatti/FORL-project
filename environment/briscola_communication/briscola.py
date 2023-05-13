@@ -6,20 +6,20 @@ import functools
 import torch
 from agents.heuristic_agent import HeuristicAgent
 
-from environment.briscola_base.card import NULLCARD_VECTOR, Card
+from environment.briscola_communication.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
-from environment.briscola_base.player_state import BriscolaPlayerState
-from environment.briscola_base.actions import BriscolaAction, PlayCardAction, PLAY_ACTION_STR_TO_ID
+from environment.briscola_communication.player_state import BriscolaPlayerState
+from environment.briscola_communication.actions import BriscolaAction, PlayCardAction, PLAY_ACTION_STR_TO_ID
 from gymnasium.utils import seeding
-from environment.briscola_base import Game
+from environment.briscola_communication import Game
 
 import gymnasium as gym
 from gymnasium.spaces import Discrete
 from gymnasium import spaces
-from environment.briscola_base.utils import Roles
+from environment.briscola_communication.utils import Roles
 import torch.nn as nn
 
-from environment.briscola_base.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
+from environment.briscola_communication.utils import CARD_POINTS, CARD_RANK_WITHIN_SUIT_INDEX
 
 
 def one_hot(a, shape):

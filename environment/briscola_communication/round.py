@@ -1,5 +1,5 @@
-from environment.briscola_base.utils import CARD_RANK_WITHIN_SUIT_INDEX
-from environment.briscola_base.utils import CARD_POINTS
+from environment.briscola_communication.utils import CARD_RANK_WITHIN_SUIT_INDEX
+from environment.briscola_communication.utils import CARD_POINTS
 
 
 class BriscolaRound:

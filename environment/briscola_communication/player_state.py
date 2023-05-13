@@ -1,7 +1,7 @@
 from typing import List, Tuple
-from environment.briscola_base.card import Card
-from environment.briscola_base.actions import BriscolaAction
-from environment.briscola_base.public_state import BriscolaPublicState
+from environment.briscola_communication.card import Card
+from environment.briscola_communication.actions import BriscolaAction
+from environment.briscola_communication.public_state import BriscolaPublicState
 
 
 class BriscolaPlayerState:

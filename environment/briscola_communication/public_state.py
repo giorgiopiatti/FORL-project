@@ -1,6 +1,6 @@
-from environment.briscola_base.card import Card
+from environment.briscola_communication.card import Card
 from typing import List, Tuple
-from environment.briscola_base.round import BriscolaRound
+from environment.briscola_communication.round import BriscolaRound
 
 
 class BriscolaPublicState:
