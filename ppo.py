@@ -307,7 +307,11 @@ if __name__ == "__main__":
                     briscola_agents['callee'] = agent_old
                 agent_old.load_state_dict(agent.state_dict())
                 agent_old.eval()
-
+            elif args.briscola_train_mode == 'bad_multiple_networks':
+                if role_now_training == 'caller':
+                    agent = agent_caller
+                if role_now_training == 'callee':
+                    agent = agent_callee
 
         # Seed is incremented at each generations
         envs = gym.vector.SyncVectorEnv(
