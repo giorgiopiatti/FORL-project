@@ -209,17 +209,17 @@ class ReplayBuffer(BaseBuffer):
             )
         self.optimize_memory_usage = optimize_memory_usage
 
-        self.observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=observation_space.dtype)
+        self.observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32)
 
         self.action_mask_shape = get_obs_shape(actions_mask_space)
-        self.actions_mask = np.zeros((self.buffer_size, self.n_envs, *self.action_mask_shape), dtype=actions_mask_space.dtype)
-        self.next_actions_mask = np.zeros((self.buffer_size, self.n_envs, *self.action_mask_shape), dtype=actions_mask_space.dtype)
+        self.actions_mask = np.zeros((self.buffer_size, self.n_envs, *self.action_mask_shape), dtype=np.bool_)
+        self.next_actions_mask = np.zeros((self.buffer_size, self.n_envs, *self.action_mask_shape), dtype=np.bool_)
 
         if optimize_memory_usage:
             # `observations` contains also the next observation
             self.next_observations = None
         else:
-            self.next_observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=observation_space.dtype)
+            self.next_observations = np.zeros((self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32)
 
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=action_space.dtype)
 
