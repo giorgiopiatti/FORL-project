@@ -210,6 +210,25 @@
             "request": "launch",
             "program": "${workspaceFolder}/ppo.py",
             "console": "integratedTerminal",
+            "args": [ "--briscola-train-mode", "bad_multiple_networks", "--total-timesteps", "80000"],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo bad_single_network",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "args": ["--freq-eval-test", "100", "--briscola-train-mode", "bad_single_network", "--total-timesteps", "800" ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo bug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "args": ["--freq-eval-test", "100", "--total-timesteps", "800", "--briscola-roles-train", "caller", "--briscola-callee-heuristic" ],
             "justMyCode": false
         },
         {
