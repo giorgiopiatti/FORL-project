@@ -102,7 +102,7 @@ def parse_args():
 def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_eval=False):
     def thunk():
         env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                          role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=device)
+                          role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu')
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.seed(seed)
         args.observation_shape = env.observation_shape
@@ -273,7 +273,7 @@ if __name__ == "__main__":
                            'good_2': 'random', 'good_3': 'random'}
 
         agent_caller = Agent(dummy_envs).to(device)
-        agent_callee = Agent(dummy_envs).to(device)
+        agent_callee = Agent(dummy_envs)
         agent_caller.eval()
         agent_callee.eval()
         agent = agent_caller
@@ -286,13 +286,14 @@ if __name__ == "__main__":
                            'good_2': 'random', 'good_3': 'random'}
 
         agent = Agent(dummy_envs).to(device)
-        agent_old = Agent(dummy_envs).to(device)
+        agent_old = Agent(dummy_envs).to('cpu')
         agent.eval()
         agent_old.eval()
         briscola_agents['caller'] = agent
 
     id_log_model_training = 0
     global_step = 0
+    start_time = time.time()
     for ngen in range(args.num_generations):
         if args.briscola_train_mode != 'solo':
             role_now_training = args.briscola_roles_train[ngen%len(args.briscola_roles_train)]
@@ -310,8 +311,12 @@ if __name__ == "__main__":
             elif args.briscola_train_mode == 'bad_multiple_networks':
                 if role_now_training == 'caller':
                     agent = agent_caller
+                    agent.to(device)
+                    agent_callee.to('cpu')
                 if role_now_training == 'callee':
                     agent = agent_callee
+                    agent.to(device)
+                    agent_caller.to('cpu')
 
         # Seed is incremented at each generations
         envs = gym.vector.SyncVectorEnv(
@@ -335,7 +340,6 @@ if __name__ == "__main__":
         values = torch.zeros((args.num_steps, args.num_envs)).to(device)
 
         # TRY NOT TO MODIFY: start the game
-        start_time = time.time()
         data, _ = envs.reset()
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
