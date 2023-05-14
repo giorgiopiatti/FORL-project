@@ -153,7 +153,8 @@ class BriscolaEnv(gym.Env):
         if self.render_mode == 'terminal':
             player_id = self._name_to_int(self.role)
             print(
-                f'Player {self.role}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, Points {self.game.judger.points} Current Round {self.game.round.trace}')
+                f'Player {self.role}, Called {self.game.called_card}, Current Hand {self.game.players[player_id].current_hand}, \
+                Points {self.game.judger.points} Coms {self.game.round.comms} Current Round {self.game.round.trace}')
 
     def close(self):
         """

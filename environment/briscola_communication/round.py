@@ -48,5 +48,6 @@ class BriscolaRound:
     def update_current_player_comm(self):
         if len(self.comms) == 5:
             self.communication_phase = False
+            self.current_player = (self.current_player + 1) % 5
         else:
             self.current_player = (self.current_player + 1) % 5

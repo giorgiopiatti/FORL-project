@@ -36,7 +36,7 @@ def parse_args():
         help="the entity (team) of wandb's project")
 
     # Algorithm specific arguments
-    parser.add_argument("--total-timesteps", type=int, default=8*5000000,
+    parser.add_argument("--total-timesteps", type=int, default=16*5000000,
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=2.5e-4,
         help="the learning rate of the optimizer")

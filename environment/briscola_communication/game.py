@@ -133,6 +133,9 @@ class BriscolaGame:
 
             if not self.round.communication_phase:
                 self.public.register_comms(self.round.comms)
+            
+            state = self.get_state(self.round.current_player)
+            self.state = state
 
         else:
             player = self.players[self.round.current_player]
@@ -154,11 +157,12 @@ class BriscolaGame:
                 self.judger.points[winner] += points
                 self.public.update_state_on_round_end(self.judger.points)
 
-        state = self.get_state(self.round.current_player)
-        self.state = state
+            state = self.get_state(self.round.current_player)
+            self.state = state
 
-        if self.print_game:
-            print(state)
+            if self.print_game:
+                print(state)
+                
         return state, self.round.current_player
 
     def step_back(self):
