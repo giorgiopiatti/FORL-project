@@ -6,7 +6,8 @@ class BriscolaRound:
     def __init__(self, starting_player, briscola_suit):
         self.trace = []
         self.briscola_suit = briscola_suit
-        self.current_player = starting_player
+        self.starting_player_round = starting_player
+        self.current_player = 0
         self.round_ended = False
         self.communication_phase = True
         self.comms = []
@@ -43,11 +44,13 @@ class BriscolaRound:
         return self.trace[winner_index][0].player_id, points
 
     def register_comm(self, player, action: BriscolaCommsAction):
+        if not isinstance(action, BriscolaCommsAction):
+            raise ValueError(f"Invalid comms! during round for {player} with role {player.role}")
         self.comms.append((player, action))
 
     def update_current_player_comm(self):
         if len(self.comms) == 5:
             self.communication_phase = False
-            self.current_player = (self.current_player + 1) % 5
+            self.current_player = self.starting_player_round
         else:
             self.current_player = (self.current_player + 1) % 5

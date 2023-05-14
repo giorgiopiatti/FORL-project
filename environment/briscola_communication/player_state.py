@@ -48,4 +48,4 @@ class BriscolaPlayerState:
         self.actions_all_coms = actions_all_coms
 
     def __str__(self) -> str:
-        return f'PlayerID {self.player_id} Role {self.role} Points {self.points} CurrentHand {self.current_hand} Round {self.trace_round}'
+        return f'PlayerID {self.player_id} Role {self.role} Points {self.points} CurrentHand {self.current_hand} Comms {self.comms_round} Round {self.trace_round}'

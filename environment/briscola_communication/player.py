@@ -74,7 +74,7 @@ class BriscolaPlayer:
                 self._current_hand.remove(self._current_hand[i])
                 self._recorded_played_cards.append(action.card)
                 return self
-        raise Exception("Invalid action for current state!")
+        raise Exception(f"Invalid action for current state for player {self} with role {self.role}")
 
     def __repr__(self) -> str:
         return f'Player {self.player_id}'

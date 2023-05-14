@@ -71,7 +71,7 @@ class BriscolaCommsAction(BriscolaAction):
         return len(PLAY_ACTION_STR_TO_ID) + self.message.value +  offset
     
     def __str__(self) -> str:
-        return 'Communicate_' + str(self.truth) + ' ' + self.message
+        return 'Communicate_' + str(self.truth) + ' ' + str(self.message)
     
     def __repr__(self) -> str:
         return self.__str__()

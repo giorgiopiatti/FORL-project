@@ -133,9 +133,13 @@ class BriscolaGame:
 
             if not self.round.communication_phase:
                 self.public.register_comms(self.round.comms)
+                if self.print_game:
+                    print('----- COMMS END ----')
             
             state = self.get_state(self.round.current_player)
             self.state = state
+            if self.print_game:
+                print(state)
 
         else:
             player = self.players[self.round.current_player]
@@ -150,9 +154,9 @@ class BriscolaGame:
             # get next state
             if self.round.round_ended:
                 # NOTE Debug
-                if self.print_game:
-                    print('----- Round END ----')
                 winner, points = self.round.end_round()
+                if self.print_game:
+                    print(f'----- Round END ---- Won {winner} with {points}')
                 self.round = BriscolaRound(winner, self.briscola_suit)
                 self.judger.points[winner] += points
                 self.public.update_state_on_round_end(self.judger.points)
