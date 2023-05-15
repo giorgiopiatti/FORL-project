@@ -82,7 +82,8 @@ class BriscolaEnv(gym.Env):
 
     def __init__(self, render_mode=None, role='caller',
                  normalize_reward=True, save_raw_state=False, heuristic_ids=[],
-                 agents={'callee': 'random',  'good_1': 'random', 'good_2': 'random', 'good_3': 'random'}, 
+                 agents={'callee': 'random',  'good_1': 'random',
+                         'good_2': 'random', 'good_3': 'random'},
                  deterministic_eval=False, device='cpu'):
 
         self.name = 'briscola_5'
@@ -124,6 +125,7 @@ class BriscolaEnv(gym.Env):
             'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
             'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+            'point_players': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
         })
@@ -169,10 +171,13 @@ class BriscolaEnv(gym.Env):
                 x = self._get_obs(player_id)
                 with torch.no_grad():
                     action_t, _, _, _ = self.agents[current_role].get_action_and_value(
-                        torch.tensor(x['observation'], dtype=torch.float, device=self.device), 
-                        torch.tensor(x['action_mask'], dtype=torch.bool, device=self.device), 
+                        torch.tensor(x['observation'],
+                                     dtype=torch.float, device=self.device),
+                        torch.tensor(x['action_mask'],
+                                     dtype=torch.bool, device=self.device),
                         deterministic=self.deterministic_eval)
-                action = PlayCardAction.from_action_id(action_t.cpu().numpy().item())
+                action = PlayCardAction.from_action_id(
+                    action_t.cpu().numpy().item())
             elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random':
                 action = state.actions[self.np_random.choice(
                     len(state.actions), size=1)[0]]
@@ -276,6 +281,7 @@ class BriscolaEnv(gym.Env):
             winning_player=one_hot(
                 [], shape=5) if wp is None else one_hot([wp], shape=5),
             round_points=points_in_round/120,
+            point_players=np.array(state.points)/120,
             position=one_hot([len(state.trace_round)], shape=5),
             is_last=len(state.trace_round) == 4,
         )

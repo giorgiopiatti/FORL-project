@@ -67,7 +67,7 @@ class BriscolaGame:
         player_id = self.round.current_player
         self.state = self.get_state(player_id)
 
-        if DEBUG_ENV:
+        if self.print_game:
             for i in range(5):
                 print(self.get_state(i))
             print(

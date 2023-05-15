@@ -69,7 +69,7 @@ class BriscolaGame:
         player_id = self.round.current_player
         self.state = self.get_state(player_id)
 
-        if DEBUG_ENV:
+        if self.print_game:
             for i in range(5):
                 print(self.get_state(i))
             print(
@@ -122,11 +122,12 @@ class BriscolaGame:
         raise Exception("Called card not found!")
 
     def step(self, action):
-        
+
         if self.round.communication_phase:
             player = self.players[self.round.current_player]
             if self.print_game:
-                print(f'Player {player.player_id} -> {action.message} saying {action.truth}')
+                print(
+                    f'Player {player.player_id} -> {action.message} saying {action.truth}')
 
             self.round.register_comm(player, action)
             self.round.update_current_player_comm()
@@ -135,7 +136,7 @@ class BriscolaGame:
                 self.public.register_comms(self.round.comms)
                 if self.print_game:
                     print('----- COMMS END ----')
-            
+
             state = self.get_state(self.round.current_player)
             self.state = state
             if self.print_game:
@@ -166,7 +167,7 @@ class BriscolaGame:
 
             if self.print_game:
                 print(state)
-                
+
         return state, self.round.current_player
 
     def step_back(self):
@@ -192,18 +193,21 @@ class BriscolaGame:
         other_hands = self._get_others_current_hand(player)
 
         if self.round.communication_phase:
-            all_actions =  [BriscolaCommsAction(truth=t, message=m) for m in Messages for t in [True, False]]
+            all_actions = [BriscolaCommsAction(
+                truth=t, message=m) for m in Messages for t in [True, False]]
             if self.communication_say_truth:
-                available_actions = [BriscolaCommsAction(truth=True, message=m) for m in Messages]
+                available_actions = [BriscolaCommsAction(
+                    truth=True, message=m) for m in Messages]
             else:
                 available_actions = all_actions
-            state = player.get_state(self.public, other_hands, available_actions, all_actions)
+            state = player.get_state(
+                self.public, other_hands, available_actions, all_actions)
         else:
             available_actions = player.available_actions_card()
-            state = player.get_state(self.public, other_hands, available_actions)
+            state = player.get_state(
+                self.public, other_hands, available_actions)
 
         return state
-
 
     def get_player_id(self):
         ''' Return current player's id
