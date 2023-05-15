@@ -182,6 +182,9 @@ class BriscolaEnv(gym.Env):
                 else:
                     action = state.actions_all_coms[self.np_random.choice(
                         len(state.actions_all_coms), size=1)[0]]
+            elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random_truth':
+                    action = state.actions[self.np_random.choice(
+                        len(state.actions), size=1)[0]]
                 # All coms allows to choose between saying truth and lie
 
             # elif isinstance(self.agents[current_role], HeuristicAgent):

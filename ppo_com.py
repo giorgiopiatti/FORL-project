@@ -319,6 +319,10 @@ if __name__ == "__main__":
         agent_old.eval()
         briscola_agents['caller'] = agent
 
+
+    if args.briscola_communicate and ( args.briscola_train_mode == 'bad_single_network' or args.briscola_train_mode == 'bad_multiple_networks') :
+        briscola_agents['callee'] = 'random_truth' # Need to learn messages
+
     id_log_model_training = 0
     global_step = 0
     start_time = time.time()

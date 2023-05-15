@@ -245,8 +245,46 @@
             "request": "launch",
             "program": "${workspaceFolder}/ppo_com.py",
             "console": "integratedTerminal",
-            "args": ["--freq-eval-test", "100", "--briscola-train-mode", "bad_single_network", "--total-timesteps", "8000", "--briscola-communicate" , "--num-generations" , "4"],
+            "args": ["--freq-eval-test", "100", "--briscola-train-mode", "bad_single_network", "--total-timesteps", "8000", "--briscola-communicate" , "--num-generations" , "4", "--num-test-games", "1"],
             "justMyCode": false
         },
+        {
+            "name": "ppo bad_single_network comms bug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com.py",
+            "console": "integratedTerminal",
+            "args": ["--briscola-train-mode", "bad_single_network", "--briscola-communicate", "--num-test-games", "1"],
+            "justMyCode": false
+        },
+        {
+            "name": "bug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/debug.py",
+            "console": "integratedTerminal",
+            "args": ["--briscola-train-mode", "bad_single_network", "--briscola-communicate", "--num-test-games", "100"],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo DEBUG euler",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-train-mode",
+                "bad_multiple_networks",
+                "--num-generations",
+                "5", "--total-timesteps",
+                "16000000",
+                "--track",
+                "--exp-name",
+                "PPO_bad_multiple_COMS_truth_D",
+                "--briscola-communicate",
+                "--briscola-communicate-truth-only"
+            ],
+            "justMyCode": false
+        }
     ]
 }

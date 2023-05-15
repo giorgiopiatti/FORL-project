@@ -204,14 +204,6 @@ class BriscolaGame:
 
         return state
 
-    @ staticmethod
-    def get_num_actions():
-        ''' Return the total number of abstract acitons
-
-        Returns:
-            int: the total number of abstract actions of briscola
-        '''
-        return 40
 
     def get_player_id(self):
         ''' Return current player's id
