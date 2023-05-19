@@ -203,6 +203,8 @@ class BriscolaEnv(gym.Env):
         observation = self._get_obs(self._player_id)
         info = self._get_info()
 
+        self._sum_rewards = np.zeros((5,))
+
         return observation, info
 
     def _get_obs(self, player_id):
@@ -226,9 +228,17 @@ class BriscolaEnv(gym.Env):
 
         terminated = False
         reward = np.array([0.0])
+
+        reward = self._scale_rewards(self._get_payoffs())
+        self._sum_rewards += reward
+        if self.render_mode == 'terminal_env':
+            print(f'Payoffs {reward}')
+        reward = reward[self._player_id]
+
         if self.game.is_over():
             terminated = True
-            reward = self._scale_rewards(self._get_payoffs())[self._player_id]
+            assert (self._sum_rewards == self._scale_rewards(
+                self.game.judger.payoffs_end_game(self.game.caller_id, self.game.callee_id))).all()
 
         observation = self._get_obs(self._player_id)
         info = self._get_info()

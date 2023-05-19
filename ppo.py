@@ -14,8 +14,6 @@ from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from agents.heuristic_agent import HeuristicAgent
 
-from environment.briscola_base.briscola import BriscolaEnv
-
 
 def parse_args():
     # fmt: off
@@ -78,6 +76,8 @@ def parse_args():
     parser.add_argument("--num-generations", type=int, default=1)
     parser.add_argument("--briscola-callee-heuristic", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
     parser.add_argument("--briscola-caller-heuristic", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
+    parser.add_argument("--briscola-env-immediate-reward", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
+
     parser.add_argument('--logdir', type=str,
                         default='log/')
     args = parser.parse_args()
@@ -175,7 +175,8 @@ def evaluate(save=False):
     data, _ = env.reset()
     next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
         data['action_mask'], dtype=torch.bool, device=device)
-
+    
+    sum_reward = np.zeros((args.num_test_games, ))
     for step in range(0, args.num_steps):
         # ALGO LOGIC: action logic
         with torch.no_grad():
@@ -186,6 +187,10 @@ def evaluate(save=False):
         data, reward, done, _, info = env.step(action.cpu().numpy())
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
+        sum_reward += reward
+    
+    reward = sum_reward
+
     metric = None
     if role_now_training in ['caller', 'callee']:
         writer.add_scalar("test/reward_bad_team_mean", reward.mean(), global_step)
@@ -215,7 +220,13 @@ if __name__ == "__main__":
     run_name = f"{args.exp_name}__{args.seed}__{int(time.time())}"
     log_path = os.path.join(args.logdir, run_name)
     os.makedirs(log_path, exist_ok=True)
-  
+    
+    if args.briscola_env_immediate_reward:
+        from environment.briscola_immediate_reward.briscola import BriscolaEnv
+    else:
+        from environment.briscola_base.briscola import BriscolaEnv
+
+
     if args.track:
         import wandb
 

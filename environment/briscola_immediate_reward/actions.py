@@ -26,6 +26,9 @@ class PlayCardAction(BriscolaAction):
     def __str__(self) -> str:
         return 'Play_' + str(self.card)
 
+    def __eq__(self, __value: object) -> bool:
+        return self.card == __value.card
+
     @staticmethod
     def from_action_id(action_id):
         s = PLAY_ACTION_ID_TO_STR[action_id]

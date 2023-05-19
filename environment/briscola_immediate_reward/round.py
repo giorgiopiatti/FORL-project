@@ -9,6 +9,7 @@ class BriscolaRound:
         self.briscola_suit = briscola_suit
         self.current_player = starting_player
         self.round_ended = False
+        self.callee_revelaed = False
 
     def update_current_player(self):
         if len(self.trace) == 5:

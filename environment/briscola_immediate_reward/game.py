@@ -3,6 +3,7 @@
 import functools
 from heapq import merge
 import numpy as np
+from environment.briscola_immediate_reward.actions import PlayCardAction
 from environment.briscola_immediate_reward.dealer import BriscolaDealer
 from environment.briscola_immediate_reward.public_state import BriscolaPublicState
 
@@ -142,15 +143,22 @@ class BriscolaGame:
         self.round.update_current_player()
         self.public.update_state_on_round_step(self.round)
 
+        if action == PlayCardAction(self.called_card):
+            self.round.callee_revelaed = True
+
         # get next state
         if self.round.round_ended:
-            # NOTE Debug
+            if self.round.callee_revelaed:
+                self.judger.callee_is_revealed()
             if self.print_game:
                 print('----- Round END ----')
             winner, points = self.round.end_round()
             self.round = BriscolaRound(winner, self.briscola_suit)
             self.judger.points[winner] += points
+            self.judger.update_round(winner, points)
             self.public.update_state_on_round_end(self.judger.points)
+
+        self.judger.games_is_over = self.is_over()
 
         state = self.get_state(self.round.current_player)
         self.state = state
