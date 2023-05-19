@@ -162,9 +162,9 @@ class Agent(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
 
-def evaluate(save=False):
+def evaluate(n, save=False):
     env = gym.vector.SyncVectorEnv(
-        [make_env(args.seed+(args.num_generations*args.num_envs)+i, role_now_training, briscola_agents, deterministic_eval=True)
+        [make_env(args.seed+(args.num_generations*args.num_envs)+n, role_now_training, briscola_agents, deterministic_eval=True)
          for i in range(1)]
     )
     data, _ = env.reset()
@@ -199,7 +199,8 @@ if __name__ == "__main__":
         from environment.briscola_communication.briscola import BriscolaEnv
         briscola_communicate_truth = True  # Start with true
     else:
-        from environment.briscola_base.briscola import BriscolaEnv
+        #from environment.briscola_base.briscola import BriscolaEnv
+        from environment.briscola_immediate_reward.briscola import BriscolaEnv
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -265,4 +266,5 @@ if __name__ == "__main__":
     #     briscola_agents['callee'] = 'random_truth'  # Need to learn messages
 
     for i in range(args.num_test_games):
-        evaluate()
+        evaluate(i)
+        print('------------------------------------------------------------------')
