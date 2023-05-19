@@ -124,6 +124,7 @@ class BriscolaEnv(gym.Env):
             'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
             'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+            'point_players': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
             'comms_round': spaces.Box(low=-1, high=1, shape=(5*5,), dtype=np.int8)
@@ -311,6 +312,7 @@ class BriscolaEnv(gym.Env):
             winning_player=one_hot(
                 [], shape=5) if wp is None else one_hot([wp], shape=5),
             round_points=points_in_round/120,
+            point_players=np.array(state.points)/120,
             position=one_hot([len(state.trace_round)], shape=5),
             is_last=len(state.trace_round) == 4,
             comms_round=comms
