@@ -186,7 +186,29 @@ class BriscolaEnv(gym.Env):
                     state, [a.to_action_id() for a in state.actions])
             else:
                 raise ValueError(f'self.agents[{current_role}] is invalid')
-            state, player_id = self.game.step(action)
+            
+            try:
+                state, player_id = self.game.step(action)
+            except Exception as e:
+                print('Error info:')
+                print(f'Player ID {player_id} self._player_id {self._player_id} current_role {current_role}')
+                print(state)
+                print(f'Actions {state.actions}')
+                if isinstance(self.agents[current_role], nn.Module):
+                    print(x)
+                    print(action)
+                    print(type(action))
+                    print(type(action_t))
+                    print(action_t.shape)
+                    print(action_t.cpu())
+                    print(action_t.cpu().numpy())
+                    print(action_t.cpu().numpy().item())
+                    print(self.agents[current_role].actor(torch.tensor(x['observation'],
+                                     dtype=torch.float, device=self.device)))
+                    print(action_t)
+                    print('---END BUG--')
+                raise e
+
         return state
 
     def reset(self, seed=None, options=None):
