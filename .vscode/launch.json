@@ -210,7 +210,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/ppo.py",
             "console": "integratedTerminal",
-            "args": [ "--briscola-train-mode", "bad_multiple_networks", "--total-timesteps", "80000"],
+            "args": [
+                "--briscola-train-mode",
+                "bad_multiple_networks",
+                "--total-timesteps",
+                "80000",
+                "--briscola-env-immediate-reward"
+            ],
             "justMyCode": false
         },
         {
@@ -219,7 +225,14 @@
             "request": "launch",
             "program": "${workspaceFolder}/ppo.py",
             "console": "integratedTerminal",
-            "args": ["--freq-eval-test", "100", "--briscola-train-mode", "bad_single_network", "--total-timesteps", "800" ],
+            "args": [
+                "--freq-eval-test",
+                "100",
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--total-timesteps",
+                "800"
+            ],
             "justMyCode": false
         },
         {
@@ -228,7 +241,16 @@
             "request": "launch",
             "program": "${workspaceFolder}/ppo.py",
             "console": "integratedTerminal",
-            "args": ["--freq-eval-test", "100", "--total-timesteps", "800", "--briscola-roles-train", "caller", "--briscola-callee-heuristic" ],
+            "args": [
+                "--freq-eval-test",
+                "100",
+                "--total-timesteps",
+                "800",
+                "--briscola-roles-train",
+                "caller",
+                "--briscola-callee-heuristic",
+                "--briscola-env-immediate-reward"
+            ],
             "justMyCode": false
         },
         {
@@ -245,7 +267,19 @@
             "request": "launch",
             "program": "${workspaceFolder}/ppo_com.py",
             "console": "integratedTerminal",
-            "args": ["--freq-eval-test", "100", "--briscola-train-mode", "bad_single_network", "--total-timesteps", "8000", "--briscola-communicate" , "--num-generations" , "4", "--num-test-games", "1"],
+            "args": [
+                "--freq-eval-test",
+                "100",
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--total-timesteps",
+                "8000",
+                "--briscola-communicate",
+                "--num-generations",
+                "4",
+                "--num-test-games",
+                "1"
+            ],
             "justMyCode": false
         },
         {
@@ -254,7 +288,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/ppo_com.py",
             "console": "integratedTerminal",
-            "args": ["--briscola-train-mode", "bad_single_network", "--briscola-communicate", "--num-test-games", "1"],
+            "args": [
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--briscola-communicate",
+                "--num-test-games",
+                "1"
+            ],
             "justMyCode": false
         },
         {
@@ -263,26 +303,54 @@
             "request": "launch",
             "program": "${workspaceFolder}/debug.py",
             "console": "integratedTerminal",
-            "args": ["--briscola-train-mode", "bad_single_network", "--briscola-communicate", "--num-test-games", "100"],
+            "args": [
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--briscola-communicate",
+                "--num-test-games",
+                "100"
+            ],
             "justMyCode": false
         },
         {
             "name": "ppo DEBUG euler",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/ppo_com.py",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--num-generations",
+                "5",
+                "--total-timesteps",
+                "8000000",
+                "--track",
+                "--exp-name",
+                "PPO_bad_single_points"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "com traces",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/briscola_trace.py",
             "console": "integratedTerminal",
             "args": [
                 "--briscola-train-mode",
                 "bad_multiple_networks",
                 "--num-generations",
-                "5", "--total-timesteps",
+                "5",
+                "--total-timesteps",
                 "16000000",
                 "--track",
                 "--exp-name",
                 "PPO_bad_multiple_COMS_truth_D",
-                "--briscola-communicate",
-                "--briscola-communicate-truth-only"
+                // "--briscola-communicate",
+                // "--briscola-communicate-truth-only",
+                "--cuda",
+                "False"
             ],
             "justMyCode": false
         }
