@@ -43,3 +43,24 @@ sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo.py --briscola-roles-train call
 sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo.py --briscola-train-mode  bad_multiple_networks --num-generations 5 --total-timesteps 8000000 --track --exp-name PPO_bad_multiple_points_IMMEDIATE_REWARD" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
 
 sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo.py --briscola-train-mode  bad_single_network --num-generations 5 --total-timesteps 8000000 --track --exp-name PPO_bad_single_points_IMMEDIATE_REWARD" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
+
+
+
+
+
+
+
+
+
+
+
+
+UNIVERSAL
+python3 ./ppo_com_universal_bad.py --track --exp-name PPO_bad_universal
+python3 ./ppo_com_universal_bad.py --track --exp-name PPO_bad_universal_COMS_TRUTH --briscola-communicate --briscola-communicate-truth-only
+python3 ./ppo_com_universal_bad.py --track --exp-name PPO_bad_universal_COMS --briscola-communicate
+
+
+sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo_com_universal_bad.py --track --exp-name PPO_bad_universal" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A s_stud_infk
+sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo_com_universal_bad.py --track --exp-name PPO_bad_universal_COMS_TRUTH --briscola-communicate --briscola-communicate-truth-only" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
+sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo_com_universal_bad.py --track --exp-name PPO_bad_universal_COMS --briscola-communicate" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon

@@ -301,7 +301,7 @@
             "name": "bug",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/debug.py",
+            "program": "${workspaceFolder}/ppo_com.py",
             "console": "integratedTerminal",
             "args": [
                 "--briscola-train-mode",
@@ -353,6 +353,24 @@
                 "False"
             ],
             "justMyCode": false
-        }
+        },
+        {
+            "name": "ppo_com_universal_bad",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com_universal_bad.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-communicate",
+                "--num-test-games",
+                "1",
+                "--total-timesteps",
+                "8000"
+            ],
+            "justMyCode": false
+        },
+
+
+        
     ]
 }

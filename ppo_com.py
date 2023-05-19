@@ -322,6 +322,9 @@ if __name__ == "__main__":
 
     if args.briscola_communicate and ( args.briscola_train_mode == 'bad_single_network' or args.briscola_train_mode == 'bad_multiple_networks') :
         briscola_agents['callee'] = 'random_truth' # Need to learn messages
+        briscola_agents['good_1'] = 'random_truth'
+        briscola_agents['good_2'] = 'random_truth'
+        briscola_agents['good_3'] = 'random_truth'
 
     id_log_model_training = 0
     global_step = 0
