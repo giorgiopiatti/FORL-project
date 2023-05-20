@@ -1,5 +1,5 @@
-''' Implement Briscola Player class
-'''
+""" Implement Briscola Player class
+"""
 import functools
 
 from environment.briscola_communication.utils import cards2str
@@ -11,13 +11,13 @@ from environment.briscola_communication.utils import Roles
 
 
 class BriscolaPlayer:
-    ''' Player can store cards in the player's hand and the role,
+    """Player can store cards in the player's hand and the role,
     determine the actions can be made according to the rules,
     and can perfrom corresponding action
-    '''
+    """
 
     def __init__(self, player_id, np_random):
-        ''' Give the player an id in one game
+        """Give the player an id in one game
 
         Args:
             player_id (int): the player_id of a player
@@ -27,7 +27,7 @@ class BriscolaPlayer:
             2. played_cards: The cards played in one round
             3. hand: Initial cards
             4. _current_hand: The rest of the cards after playing some of them
-        '''
+        """
         self.np_random = np_random
         self.player_id = player_id
         self.initial_hand: List[Card] = None
@@ -46,7 +46,9 @@ class BriscolaPlayer:
     def set_current_hand(self, value):
         self._current_hand = value
 
-    def get_state(self, public, other_hands, available_actions, available_actions_all_mess=None):
+    def get_state(
+        self, public, other_hands, available_actions, available_actions_all_mess=None
+    ):
         state = BriscolaPlayerState(
             public=public,
             role=self.role,
@@ -54,27 +56,28 @@ class BriscolaPlayer:
             current_hand=self._current_hand,
             other_hands=other_hands,
             actions=available_actions,
-            actions_all_coms=available_actions_all_mess
+            actions_all_coms=available_actions_all_mess,
         )
         return state
 
     def available_actions_card(self):
-        ''' Get the actions can be made based on the rules
-        '''
+        """Get the actions can be made based on the rules"""
         return [PlayCardAction(c) for c in self._current_hand]
 
     def play(self, action):
-        ''' Perfrom action
+        """Perfrom action
         Args:
             action (string): specific action
-        '''
+        """
         self.played_cards = action
         for i, remain_card in enumerate(self._current_hand):
             if action.card == remain_card:
                 self._current_hand.remove(self._current_hand[i])
                 self._recorded_played_cards.append(action.card)
                 return self
-        raise Exception(f"Invalid action for current state for player {self} with role {self.role}")
+        raise Exception(
+            f"Invalid action for current state for player {self} with role {self.role}"
+        )
 
     def __repr__(self) -> str:
-        return f'Player {self.player_id}'
+        return f"Player {self.player_id}"

@@ -1,8 +1,9 @@
 from environment.briscola_communication.utils import CARD_RANK_WITHIN_SUIT_INDEX
 from environment.briscola_communication.utils import CARD_POINTS
 from environment.briscola_communication.actions import BriscolaCommsAction
-class BriscolaRound:
 
+
+class BriscolaRound:
     def __init__(self, starting_player, briscola_suit):
         self.trace = []
         self.briscola_suit = briscola_suit
@@ -28,11 +29,19 @@ class BriscolaRound:
         for i in range(1, 5):
             current_card = self.trace[i][1].card
             if winner_card.suit == self.briscola_suit:
-                if CARD_RANK_WITHIN_SUIT_INDEX[winner_card.rank] < CARD_RANK_WITHIN_SUIT_INDEX[current_card.rank] and current_card.suit == self.briscola_suit:
+                if (
+                    CARD_RANK_WITHIN_SUIT_INDEX[winner_card.rank]
+                    < CARD_RANK_WITHIN_SUIT_INDEX[current_card.rank]
+                    and current_card.suit == self.briscola_suit
+                ):
                     winner_card = current_card
                     winner_index = i
             else:
-                if current_card.suit == self.briscola_suit or (CARD_RANK_WITHIN_SUIT_INDEX[current_card.rank] > CARD_RANK_WITHIN_SUIT_INDEX[winner_card.rank] and current_card.suit == winner_card.suit):
+                if current_card.suit == self.briscola_suit or (
+                    CARD_RANK_WITHIN_SUIT_INDEX[current_card.rank]
+                    > CARD_RANK_WITHIN_SUIT_INDEX[winner_card.rank]
+                    and current_card.suit == winner_card.suit
+                ):
                     winner_card = current_card
                     winner_index = i
 
@@ -45,7 +54,9 @@ class BriscolaRound:
 
     def register_comm(self, player, action: BriscolaCommsAction):
         if not isinstance(action, BriscolaCommsAction):
-            raise ValueError(f"Invalid comms! during round for {player} with role {player.role}")
+            raise ValueError(
+                f"Invalid comms! during round for {player} with role {player.role}"
+            )
         action.set_meaning_from_player(player, self.briscola_suit)
         self.comms.append((player, action))
 

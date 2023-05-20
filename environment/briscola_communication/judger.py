@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-''' Implement Briscola Judger class
-'''
+""" Implement Briscola Judger class
+"""
 import numpy as np
 import collections
 from itertools import combinations
@@ -8,14 +8,9 @@ from bisect import bisect_left
 
 
 class BriscolaJudger:
-    ''' Determine what cards a player can play
-    '''
+    """Determine what cards a player can play"""
 
-    def __init__(self,
-                 players,
-                 caller_id,
-                 callee_id,
-                 called_points):
+    def __init__(self, players, caller_id, callee_id, called_points):
         self.players = players
         self.points = [0 for _ in range(len(self.players))]
         self.called_points = called_points
@@ -24,7 +19,7 @@ class BriscolaJudger:
 
     @staticmethod
     def judge_game(players, player_id):
-        ''' Judge whether the game is over
+        """Judge whether the game is over
 
         Args:
             players (list): list of  BriscolaPlayer objects
@@ -32,7 +27,7 @@ class BriscolaJudger:
 
         Returns:
             (bool): True if the game is over
-        '''
+        """
         player = players[player_id]
         if not player.current_hand:
             return True

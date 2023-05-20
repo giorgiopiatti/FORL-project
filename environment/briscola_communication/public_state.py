@@ -18,7 +18,7 @@ class BriscolaPublicState:
 
     called_card_player: int
 
-    comms_round:  List[Tuple[int, BriscolaCommsAction]]
+    comms_round: List[Tuple[int, BriscolaCommsAction]]
 
     def __init__(self, caller_id, caller_points_bet, called_card) -> None:
         self.caller_points_bet = caller_points_bet
@@ -39,8 +39,8 @@ class BriscolaPublicState:
     def update_state_on_round_step(self, round: BriscolaRound):
         self.trace_round = round.trace
 
-        for (player, card) in round.trace:
-            if (card.card == self.called_card):
+        for player, card in round.trace:
+            if card.card == self.called_card:
                 self.called_card_player = player.player_id
 
     def register_comms(self, comms):
