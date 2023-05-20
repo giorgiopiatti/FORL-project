@@ -58,7 +58,31 @@ class BriscolaCommsAction(BriscolaAction):
         self.action_type = 'comms'
         self.truth = truth
         self.message = message
-    
+        self.positive = None 
+
+    def set_meaning_from_player(self, player, briscola_suit):
+        is_valid = False
+        if self.message == Messages.CARICO_NOT_BRISCOLA:
+            for c in player.current_hand:
+                is_valid = is_valid or (c.rank in ['A', '3'] and c.suit != briscola_suit) 
+        elif self.message == Messages.BRISCOLINO:
+            for c in player.current_hand:
+                is_valid = is_valid or (c.rank in ['2', '4', '5', '6', '7'] and c.suit == briscola_suit) 
+        elif self.message == Messages.BRISCOLA_FIGURA:
+            for c in player.current_hand:
+                is_valid = is_valid or (c.rank in ['K', 'Q', 'J'] and c.suit == briscola_suit) 
+        elif self.message == Messages.BRISCOLA_CARICO:
+            for c in player.current_hand:
+                is_valid = is_valid or (c.rank in ['A', '3'] and c.suit == briscola_suit) 
+        elif self.message == Messages.LISCIO:
+            for c in player.current_hand:
+                is_valid = is_valid or (c.rank in ['2', '4', '5', '6', '7'] and c.suit != briscola_suit) 
+
+        if (is_valid and self.truth) or (not is_valid and not self.truth):
+            self.positive = True
+        else:
+            self.positive = False
+
     @staticmethod
     def from_action_id(action_id):
         action_id = action_id - len(PLAY_ACTION_STR_TO_ID)
@@ -75,6 +99,7 @@ class BriscolaCommsAction(BriscolaAction):
     
     def __repr__(self) -> str:
         return self.__str__()
+
 
 
 

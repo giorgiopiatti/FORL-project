@@ -272,27 +272,7 @@ class BriscolaEnv(gym.Env):
 
         comms = np.zeros((5*5, ))
         for (player, comm) in state.comms_round:
-            is_valid = False
-            if comm.message == Messages.CARICO_NOT_BRISCOLA:
-                for c in player.current_hand:
-                    is_valid = is_valid or (c.rank in ['A', '3'] and c.suit != briscola_suit) 
-            elif comm.message == Messages.BRISCOLINO:
-                for c in player.current_hand:
-                    is_valid = is_valid or (c.rank in ['2', '4', '5', '6', '7'] and c.suit == briscola_suit) 
-            elif comm.message == Messages.BRISCOLA_FIGURA:
-                for c in player.current_hand:
-                    is_valid = is_valid or (c.rank in ['K', 'Q', 'J'] and c.suit == briscola_suit) 
-            elif comm.message == Messages.BRISCOLA_CARICO:
-                for c in player.current_hand:
-                    is_valid = is_valid or (c.rank in ['A', '3'] and c.suit == briscola_suit) 
-            elif comm.message == Messages.LISCIO:
-                for c in player.current_hand:
-                    is_valid = is_valid or (c.rank in ['2', '4', '5', '6', '7'] and c.suit != briscola_suit) 
-
-            if (is_valid and comm.truth) or (not is_valid and not comm.truth):
-                comms[player.player_id*5 + comm.message.value] = 1
-            else:
-                comms[player.player_id*5 + comm.message.value] = -1
+            comms[player.player_id*5 + comm.message.value] = 1 if comm.positive else -1
 
         encoding = dict(
             caller_id=one_hot([state.caller_id], shape=5),

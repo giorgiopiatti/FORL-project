@@ -46,6 +46,7 @@ class BriscolaRound:
     def register_comm(self, player, action: BriscolaCommsAction):
         if not isinstance(action, BriscolaCommsAction):
             raise ValueError(f"Invalid comms! during round for {player} with role {player.role}")
+        action.set_meaning_from_player(player, self.briscola_suit)
         self.comms.append((player, action))
 
     def update_current_player_comm(self):
