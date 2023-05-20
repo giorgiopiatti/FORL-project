@@ -3,6 +3,7 @@ from enum import Enum
 DEBUG_ENV = False
 
 CARD_RANK_WITHIN_SUIT = ["2", "4", "5", "6", "7", "J", "Q", "K", "3", "A"]
+DICT_SUIT_TO_INT = {"C": 0, "D": 1, "H": 2, "S": 3}
 
 CARD_RANK_WITHIN_SUIT_INDEX = {
     "2": 0,

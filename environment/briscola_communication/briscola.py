@@ -19,7 +19,7 @@ from environment.briscola_communication import Game
 import gymnasium as gym
 from gymnasium.spaces import Discrete
 from gymnasium import spaces
-from environment.briscola_communication.utils import Roles
+from environment.briscola_communication.utils import DICT_SUIT_TO_INT, Roles
 import torch.nn as nn
 
 from environment.briscola_communication.utils import (
@@ -33,9 +33,6 @@ def one_hot(a, shape):
     for el in a:
         b[el] = 1
     return b
-
-
-DICT_SUIT_TO_INT = {"C": 0, "D": 1, "H": 2, "S": 3}
 
 
 def wins(card1, card2, index1, index2, briscola_suit):
@@ -200,26 +197,13 @@ class BriscolaEnv(gym.Env):
                         deterministic=self.deterministic_eval,
                     )
                 action = self._decode_action(action_t.cpu().numpy().item())
-            elif (
-                isinstance(self.agents[current_role], str)
-                and self.agents[current_role] == "random"
-            ):
+            elif self.agents[current_role] == "random":
                 if state.actions_all_coms is None:
-                    action = state.actions[
-                        self.np_random.choice(len(state.actions), size=1)[0]
-                    ]
+                    action = self.np_random.choice(state.actions, size=1)[0]
                 else:
-                    action = state.actions_all_coms[
-                        self.np_random.choice(len(state.actions_all_coms), size=1)[0]
-                    ]
-            elif (
-                isinstance(self.agents[current_role], str)
-                and self.agents[current_role] == "random_truth"
-            ):
-                action = state.actions[
-                    self.np_random.choice(len(state.actions), size=1)[0]
-                ]
-            # All coms allows to choose between saying truth and lie
+                    action = self.np_random.choice(state.actions_all_coms, size=1)[0]
+            elif self.agents[current_role] == "random_truth":
+                action = self.np_random.choice(state.actions, size=1)[0]
 
             # elif isinstance(self.agents[current_role], HeuristicAgent):
             #     action = self.agents[current_role].get_heuristic_action(
@@ -240,9 +224,8 @@ class BriscolaEnv(gym.Env):
         state = self._play_until_is_me(state, player_id)
 
         observation = self._get_obs(self._player_id)
-        info = self._get_info()
 
-        return observation, info
+        return observation, {}
 
     def _get_obs(self, player_id):
         state = self.game.get_state(player_id)
@@ -253,9 +236,6 @@ class BriscolaEnv(gym.Env):
         return dict(
             {"observation": self._extract_state(state), "action_mask": action_mask}
         )
-
-    def _get_info(self):
-        return {}
 
     def step(self, action):
         self.render()
@@ -276,10 +256,9 @@ class BriscolaEnv(gym.Env):
                 reward = reward / 120.0
 
         observation = self._get_obs(self._player_id)
-        info = self._get_info()
 
         self.render()
-        return observation, reward, terminated, False, info
+        return observation, reward, terminated, False, {}
 
     def _extract_state(self, state: BriscolaPlayerState):
         """Encode state:
@@ -326,7 +305,7 @@ class BriscolaEnv(gym.Env):
             else one_hot([wp], shape=5),
             round_points=points_in_round / 120,
             point_players=np.array(state.points) / 120,
-            position=one_hot([len(state.trace_round)], shape=5),
+            position=one_hot([state.position_in_round], shape=5),
             is_last=len(state.trace_round) == 4,
             comms_round=comms,
         )
@@ -381,45 +360,3 @@ class BriscolaEnv(gym.Env):
     def seed(self, seed):
         self.np_random, seed = seeding.np_random(seed)
         self.game.seed(seed=seed)
-
-
-def _cards2array(cards: List[Card]):
-    matrix = []
-    for card in cards:
-        matrix.append(card.vector())
-    return matrix
-
-
-def _trace2array(trace: List[List[Tuple[int, Card]]]):
-    enc = []
-    for r in trace:
-        enc.append(_round2array(r))
-    if len(enc) < 8:
-        for _ in range(8 - len(enc)):
-            enc.append(_pad_round([], 5))
-    return enc
-
-
-def _round2array(round: List[Tuple[int, Card]]):
-    enc = []
-    for i, move in enumerate(round):
-        # turn=np.array([i+1]),
-        enc.append(
-            dict(player=np.array([move[0].player_id + 1]), card=move[1].card.vector())
-        )
-    return _pad_round(enc, 5)
-
-
-def _pad_round(lst: list, max_len: int):
-    if len(lst) < max_len:
-        for _ in range(max_len - len(lst)):
-            # turn=np.array([0]),
-            lst.append(dict(player=np.array([0]), card=NULLCARD_VECTOR))
-    return lst
-
-
-def _pad_cards(lst: list, max_len: int):
-    if len(lst) < max_len:
-        for _ in range(max_len - len(lst)):
-            lst.append(NULLCARD_VECTOR)
-    return lst

@@ -71,6 +71,7 @@ class BriscolaGame:
         self.public = BriscolaPublicState(
             self.caller_id, self.caller_points_bet, self.called_card
         )
+        self.public.round_order = self.round.player_order
 
         # get state of first player
         player_id = self.round.current_player
@@ -82,6 +83,10 @@ class BriscolaGame:
             print(f"Briscola: {self.briscola_suit} called_card: {self.called_card}")
 
         return self.state, player_id
+
+    def log(self, m):
+        if self.print_game:
+            print(m)
 
     def dummy_bet(self):
         self.caller_id = self.np_random.choice(5, 1)[0]
@@ -134,71 +139,52 @@ class BriscolaGame:
     def step(self, action):
         if self.round.communication_phase:
             player = self.players[self.round.current_player]
-            if self.print_game:
-                print(
-                    f"Player {player.player_id} -> {action.message} saying {action.truth}"
-                )
+            self.log(f"Player {player.player_id} -> {action.message} saying {action.truth}")
 
             self.round.register_comm(player, action)
             self.round.update_current_player_comm()
 
             if not self.round.communication_phase:
-                self.public.register_comms(self.round.comms)
-                if self.print_game:
-                    print("----- COMMS END ----")
+                self.public.comms_round = self.round.comms
+                self.log("----- COMMS END ----")
 
             state = self.get_state(self.round.current_player)
             self.state = state
-            if self.print_game:
-                print(state)
+            self.log(state)
 
         else:
             player = self.players[self.round.current_player]
             player.play(action)
-            if self.print_game:
-                print(f"Player {player.player_id} -> {action.card}")
+            self.log(f"Player {player.player_id} -> {action.card}")
 
-            self.round.proceed_round(player, action)
+            self.round.trace.append((player, action))
             self.round.update_current_player()
-            self.public.update_state_on_round_step(self.round)
+
+            self.public.trace_round = self.round.trace
+            for player, card in self.round.trace:
+                if card.card == self.called_card:
+                    self.public.called_card_player = player.player_id
 
             # get next state
             if self.round.round_ended:
-                # NOTE Debug
                 winner, points = self.round.end_round()
-                if self.print_game:
-                    print(f"----- Round END ---- Won {winner} with {points}")
+                self.log(f"----- Round END ---- Won {winner} with {points}")
                 self.round = BriscolaRound(winner, self.briscola_suit)
                 self.judger.points[winner] += points
-                self.public.update_state_on_round_end(self.judger.points)
+                # Update public stante on round end
+                self.public.trace.append(self.public.trace_round)
+                self.public.trace_round = []
+                self.public.comms_round = []
+                self.public.points = self.judger.points
+                self.public.round_order = self.round.player_order
 
             state = self.get_state(self.round.current_player)
             self.state = state
-
-            if self.print_game:
-                print(state)
+            self.log(state)
 
         return state, self.round.current_player
 
-    def step_back(self):
-        """Return to the previous state of the game
-
-        Returns:
-            (bool): True if the game steps back successfully
-        """
-        if not self.trace:
-            return False
-        return False
-
     def get_state(self, player_id):
-        """Return player's state
-
-        Args:
-            player_id (int): player id
-
-        Returns:
-            (dict): The state of the player
-        """
         player = self.players[player_id]
         other_hands = self._get_others_current_hand(player)
 
@@ -222,22 +208,6 @@ class BriscolaGame:
             state = player.get_state(self.public, other_hands, available_actions)
 
         return state
-
-    def get_player_id(self):
-        """Return current player's id
-
-        Returns:
-            int: current player's id
-        """
-        return self.round.current_player
-
-    def get_num_players(self):
-        """Return the number of players in briscola
-
-        Returns:
-            int: the number of players in briscola
-        """
-        return self.num_players
 
     def is_over(self):
         """Judge whether a game is over

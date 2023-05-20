@@ -12,15 +12,13 @@ class BriscolaRound:
         self.round_ended = False
         self.communication_phase = True
         self.comms = []
+        self.player_order = [(self.starting_player_round + i) % 5 for i in range(5)]
 
     def update_current_player(self):
         if len(self.trace) == 5:
             self.round_ended = True
         else:
             self.current_player = (self.current_player + 1) % 5
-
-    def proceed_round(self, player, action):
-        self.trace.append((player, action))
 
     def end_round(self):
         # compute winner

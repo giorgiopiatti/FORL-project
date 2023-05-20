@@ -57,6 +57,7 @@ class BriscolaPlayer:
             other_hands=other_hands,
             actions=available_actions,
             actions_all_coms=available_actions_all_mess,
+            position_in_round=public.round_order.index(self.player_id),
         )
         return state
 

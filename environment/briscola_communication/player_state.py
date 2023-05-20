@@ -39,6 +39,7 @@ class BriscolaPlayerState:
         other_hands: List[str],
         actions: List[str],
         actions_all_coms,
+        position_in_round,
     ) -> None:
         self.caller_id = public.caller_id
         self.caller_points_bet = public.caller_points_bet
@@ -56,6 +57,7 @@ class BriscolaPlayerState:
         self.other_hands = other_hands
         self.actions = actions
         self.actions_all_coms = actions_all_coms
+        self.position_in_round = position_in_round
 
     def __str__(self) -> str:
         return f"PlayerID {self.player_id} Role {self.role} Points {self.points} CurrentHand {self.current_hand} Comms {self.comms_round} Round {self.trace_round}"
