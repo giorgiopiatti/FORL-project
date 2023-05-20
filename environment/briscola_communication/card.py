@@ -2,7 +2,7 @@
 '''
 import numpy as np
 
-from environment.briscola_communication.utils import CARD_RANK_WITHIN_SUIT_INDEX, CARD_POINTS
+from environment.briscola_communication.utils import CARD_RANK_WITHIN_SUIT_INDEX, CARD_POINTS, CARD_STR_TO_NUM
 
 NULLCARD_VECTOR = np.array((0, 0, 0))
 
@@ -39,11 +39,6 @@ class Card:
             # don't attempt to compare against unrelated types
             return NotImplemented
 
-    def __hash__(self):
-        suit_index = Card.valid_suit.index(self.suit)
-        rank_index = Card.valid_rank.index(self.rank)
-        return rank_index + len(Card.valid_rank) * suit_index
-
     def __str__(self):
         ''' Get string representation of a card.
 
@@ -60,20 +55,6 @@ class Card:
         '''
         return self.rank + self.suit
 
-    # def get_index(self):
-    #     ''' Get index of a card.
-
-    #     Returns:
-    #         string: the combination of suit and rank of a card. Eg: 1S, 2H, AD, BJ, RJ...
-    #     '''
-    #     return self.suit+self.rank
-
-    def get_index_suit(self):
-        return Card.valid_suit.index(self.suit) + 1
-
-    def get_index_rank(self):
-        return Card.valid_rank.index(self.rank) + 1
-
     @staticmethod
     def init_from_string(card_string):
         return Card(rank=card_string[0], suit=card_string[1])
@@ -86,3 +67,6 @@ class Card:
 
     def vector(self) -> tuple:
         return np.array([self.get_index_rank(), self.get_index_suit(), self.points])
+    
+    def to_num(self):
+        return CARD_STR_TO_NUM[self.rank + self.suit]

@@ -9,7 +9,7 @@ from agents.heuristic_agent import HeuristicAgent
 from environment.briscola_communication.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
 from environment.briscola_communication.player_state import BriscolaPlayerState
-from environment.briscola_communication.actions import BriscolaAction, BriscolaCommsAction, Messages, PlayCardAction, PLAY_ACTION_STR_TO_ID
+from environment.briscola_communication.actions import BriscolaAction, BriscolaCommsAction, PlayCardAction
 from gymnasium.utils import seeding
 from environment.briscola_communication import Game
 
@@ -81,7 +81,7 @@ class BriscolaEnv(gym.Env):
     '''
 
     def __init__(self, render_mode=None, role='caller',
-                 normalize_reward=True, save_raw_state=False, heuristic_ids=[],
+                 normalize_reward=True,
                  agents={'callee': 'random',  'good_1': 'random', 'good_2': 'random', 'good_3': 'random'}, 
                  deterministic_eval=False, device='cpu', communication_say_truth=False):
 
@@ -89,8 +89,6 @@ class BriscolaEnv(gym.Env):
         self.game = Game(print_game=(render_mode == 'terminal_env'), communication_say_truth=communication_say_truth)
         self.screen = None
         self.normalize_reward = normalize_reward
-        self.save_raw_state = save_raw_state
-        self.heuristic_ids = heuristic_ids
         self.use_role_ids = True
         self.role = role
         self.agents = agents
@@ -100,18 +98,6 @@ class BriscolaEnv(gym.Env):
         self.action_space = spaces.Discrete(self.num_actions)
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
-        # (value, seed, points)
-        card_space = spaces.Box(low=np.array([0, 0, 0]), high=np.array([
-                                11, 4, 11]), shape=(3,), dtype=np.int8)
-        # (0,0,0) is used to pad, we encode 1-4 the suits, and 1-11 the rank
-
-        player_id_space = spaces.Box(low=1, high=5, shape=(1,), dtype=np.int8)
-
-        played_card_space = spaces.Dict(
-            {'player': player_id_space, 'card': card_space})  # 'turn': player_id_space,
-        round_space = spaces.Tuple([played_card_space]*5)
-        # 0 is used for padding
-
         self._raw_observation_space = spaces.Dict({
             'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
@@ -214,10 +200,9 @@ class BriscolaEnv(gym.Env):
 
     def _get_obs(self, player_id):
         state = self.game.get_state(player_id)
-        legal_moves = self._get_legal_actions(state)
         action_mask = np.zeros(self.num_actions, "int8")
-        for i in legal_moves:
-            action_mask[i] = 1
+        for a in state.actions:
+            action_mask[a.to_action_id()] = 1
 
         return dict({"observation": self._extract_state(state), "action_mask": action_mask})
 
@@ -235,7 +220,10 @@ class BriscolaEnv(gym.Env):
         reward = np.array([0.0])
         if self.game.is_over():
             terminated = True
-            reward = self._scale_rewards(self._get_payoffs())[self._player_id]
+            reward = self.game.judger.judge_payoffs(self.game.caller_id, self.game.callee_id)
+            reward = reward[self._player_id]
+            if self.normalize_reward:
+                reward = reward / 120.0
 
         observation = self._get_obs(self._player_id)
         info = self._get_info()
@@ -249,19 +237,6 @@ class BriscolaEnv(gym.Env):
         Args:
             state (dict): dict of original state
         '''
-        # 'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
-        #                     'player_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'briscola_suit': spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
-        #                     'belief': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'current_hand': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'trace_round': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
-        #                     'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
         briscola_suit = state.called_card.suit
         wc, wp = winning(state.trace_round, briscola_suit)
         flattened_trace = [item for round in state.trace for item in round]
@@ -279,16 +254,15 @@ class BriscolaEnv(gym.Env):
             role=one_hot([state.role.value-1], shape=3),
             player_id=one_hot([state.player_id], shape=5),
             briscola_suit=one_hot([DICT_SUIT_TO_INT[briscola_suit]], shape=4),
-            belief=one_hot([], shape=5) if state.called_card_player == -
-            1 else one_hot([state.called_card_player], shape=5),
-            current_hand=one_hot([PLAY_ACTION_STR_TO_ID[card.rank + card.suit]
+            belief=one_hot([], shape=5) if state.called_card_player == -1 else one_hot([state.called_card_player], shape=5),
+            current_hand=one_hot([card.to_num()
                                  for card in state.current_hand], shape=40),
-            played_cards=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit]
+            played_cards=one_hot([card.to_num()
                                  for _, card in flattened_trace], shape=40),
-            trace_round=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit]
+            trace_round=one_hot([card.to_num()
                                 for _, card in state.trace_round], shape=40),
             winning_card=one_hot([], shape=40) if wc is None else one_hot(
-                [PLAY_ACTION_STR_TO_ID[wc.rank + wc.suit]], shape=40),
+                [wc.to_num()], shape=40),
             winning_player=one_hot(
                 [], shape=5) if wp is None else one_hot([wp], shape=5),
             round_points=points_in_round/120,
@@ -299,14 +273,6 @@ class BriscolaEnv(gym.Env):
         )
         # return encoding
         return spaces.utils.flatten(self._raw_observation_space, encoding)
-
-    def _get_payoffs(self):
-        ''' Get the payoffs of players. Must be implemented in the child class.
-
-        Returns:
-            payoffs (list): a list of payoffs for each player
-        '''
-        return self.game.judger.judge_payoffs(self.game.caller_id, self.game.callee_id)
 
     def _decode_action(self, action_id) -> BriscolaAction:
         ''' Action id -> the action in the game. Must be implemented in the child class.
@@ -321,22 +287,6 @@ class BriscolaEnv(gym.Env):
             return PlayCardAction.from_action_id(action_id)
         else:
             return BriscolaCommsAction.from_action_id(action_id)
-
-    def _get_legal_actions(self, state: BriscolaPlayerState):
-        ''' Get all legal actions for current state
-
-        Returns:
-            legal_actions (list): a list of legal actions' id
-        '''
-        legal_actions = state.actions
-        legal_actions = dict(
-            {a.to_action_id(): None for a in legal_actions})
-        return legal_actions
-
-    def _scale_rewards(self, reward):
-        if self.normalize_reward:
-            return reward / 120.0
-        return reward
 
     def _construct_int_name_mappings(self, caller_id, callee_id):
         ids = [0, 1, 2, 3, 4]
