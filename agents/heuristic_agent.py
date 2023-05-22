@@ -320,6 +320,34 @@ class HeuristicAgent:
                                 winner_index, raw_state.player_id, briscola_suit)
                     if (w == Card(current_suit, rank)):
                         logits[PLAY_ACTION_STR_TO_ID[card]] += 100
+            
+            if caller_played and callee_played and (winner_index == caller_id or winner_index == callee_id):
+                for suit in suit_list:
+                    if suit != briscola_suit:
+                        for rank in rank_list:
+                            card = rank + suit
+                            w, _ = wins(winner_card, Card(suit, rank),
+                                winner_index, raw_state.player_id, briscola_suit)
+                            if (w == Card(suit, rank)):
+                                logits[PLAY_ACTION_STR_TO_ID[card]] += CARD_POINTS[rank]*5
+            
+            count = 0
+            starting_player = raw_state.trace_round[0][0].player_id
+            next_player = next_pos(raw_state.player_id)
+            while (next_player != starting_player):
+                if next_player == callee_id or next_player == caller_id:
+                    count = 0
+                else:
+                    count += 1
+                next_player = next_pos(next_player)
+            
+            if count > 0 and (winner_index == caller_id or winner_index == callee_id):
+                for rank in ['2', '4', '5', '6', '7', 'J']:
+                    card =  rank + briscola_suit
+                    w, _ = wins(winner_card, Card(briscola_suit, rank),
+                     winner_index, raw_state.player_id, briscola_suit)
+                    if (w == Card(briscola_suit, rank)):
+                        logits[PLAY_ACTION_STR_TO_ID[card]] += (10 - CARD_POINTS[rank])
 
         return logits
 
