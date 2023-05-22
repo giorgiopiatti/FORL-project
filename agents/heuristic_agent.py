@@ -213,6 +213,7 @@ class HeuristicAgent:
 
         points_in_round = 0
         caller_played = False
+        callee_played = False
         is_last = len(raw_state.trace_round) == 4
         before_caller = next_pos(raw_state.player_id) == raw_state.caller_id
         after_caller = prev_pos(raw_state.player_id) == raw_state.caller_id
@@ -239,6 +240,8 @@ class HeuristicAgent:
 
         else:
             winner_card = raw_state.trace_round[0][1].card
+            callee_id = raw_state.called_card_player
+
             for i, (prev_player, prev_card) in enumerate(raw_state.trace_round):
                 player_id = prev_player.player_id
 
@@ -251,6 +254,9 @@ class HeuristicAgent:
                 if player_id == caller_id:
                     caller_played = True
 
+                if player_id == callee_id:
+                    callee_id = True
+
             if points_in_round >= 10 and not caller_played:  # briscolino 20, briscolone 10, normale kariko -10
                 for rank in rank_list:
                     for suit in suit_list:
@@ -259,8 +265,25 @@ class HeuristicAgent:
                                ] -= CARD_POINTS[rank]
                         if suit == briscola_suit:
                             logits[PLAY_ACTION_STR_TO_ID[card]] += 20
+            
+            if (winner_index != caller_id and winner_index != callee_id and callee_id != -1):
+                if caller_played and callee_played:
+                    for suit in suit_list:
+                        if suit != briscola_suit:
+                            for rank in rank_list:
+                                card = rank + suit
+                                logits[PLAY_ACTION_STR_TO_ID[card]] += 5*CARD_POINTS[rank]
+                
+                elif caller_played or callee_played:
+                    for rank in ['J', 'Q', 'K']:
+                        for suit in suit_list:
+                            if suit != briscola_suit:
+                                card = rank + suit
+                                logits[PLAY_ACTION_STR_TO_ID[card]] += 5
+                
+                            
 
-            if points_in_round >= 10 and winner_index == caller_id:
+            if points_in_round >= 10 and (winner_index == caller_id or winner_index == callee_id):
                 for suit in suit_list:
                     for rank in rank_list:
                         card = rank + suit
