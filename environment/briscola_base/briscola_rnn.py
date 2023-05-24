@@ -81,7 +81,7 @@ class BriscolaEnv(gym.Env):
     '''
 
     def __init__(self, render_mode=None, role='caller',
-                 normalize_reward=True, save_raw_state=False, heuristic_ids=[],
+                 normalize_reward=True,
                  agents={'callee': 'random',  'good_1': 'random',
                          'good_2': 'random', 'good_3': 'random'},
                  deterministic_eval=False, device='cpu'):
@@ -90,8 +90,6 @@ class BriscolaEnv(gym.Env):
         self.game = Game(print_game=(render_mode == 'terminal_env'))
         self.screen = None
         self.normalize_reward = normalize_reward
-        self.save_raw_state = save_raw_state
-        self.heuristic_ids = heuristic_ids
         self.use_role_ids = True
         self.role = role
         self.agents = agents
@@ -101,26 +99,13 @@ class BriscolaEnv(gym.Env):
         self.action_space = spaces.Discrete(40)
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
-        # (value, seed, points)
-        card_space = spaces.Box(low=np.array([0, 0, 0]), high=np.array([
-                                11, 4, 11]), shape=(3,), dtype=np.int8)
-        # (0,0,0) is used to pad, we encode 1-4 the suits, and 1-11 the rank
-
-        player_id_space = spaces.Box(low=1, high=5, shape=(1,), dtype=np.int8)
-
-        played_card_space = spaces.Dict(
-            {'player': player_id_space, 'card': card_space})  # 'turn': player_id_space,
-        round_space = spaces.Tuple([played_card_space]*5)
-        # 0 is used for padding
-
-        self._raw_observation_space = spaces.Dict({
+        self._raw_observation_space_current_round = spaces.Dict({
             'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
             'player_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'briscola_suit': spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
             'belief': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'current_hand': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-            'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
             'trace_round': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
             'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
             'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
@@ -129,16 +114,33 @@ class BriscolaEnv(gym.Env):
             'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
             'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
         })
+
+        self._raw_observation_space_previous_round = spaces.Dict({
+            'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+            'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+            'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+            'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+        })
+
+        self.current_round_shape = (1, spaces.flatdim(
+            self._raw_observation_space_current_round))
+
+        self.previous_round_shape = (1, spaces.flatdim(
+            self._raw_observation_space_previous_round))
+
+        dim = spaces.flatdim(self._raw_observation_space_previous_round) + \
+            spaces.flatdim(self._raw_observation_space_current_round)
+
         self.observation_space = spaces.Dict(
             {
-                "observation": spaces.Box(low=0, high=1, shape=(spaces.flatdim(self._raw_observation_space),), dtype=np.int8),
+                "observation": spaces.Box(low=0, high=1, shape=(1, dim,), dtype=np.int8),
                 "action_mask": spaces.Box(
-                    low=0, high=1, shape=(self.num_actions,), dtype=np.int8
+                    low=0, high=1, shape=(1, self.num_actions,), dtype=np.int8
                 )
             }
         )
 
-        self.observation_shape = spaces.flatdim(self._raw_observation_space)
+        self.observation_shape = (1, dim)
         self.render_mode = render_mode
 
     def render(self):
@@ -235,7 +237,7 @@ class BriscolaEnv(gym.Env):
         for i in legal_moves:
             action_mask[i] = 1
 
-        return dict({"observation": self._extract_state(state), "action_mask": action_mask})
+        return dict({"observation": np.expand_dims(self._extract_state(state), axis=0), "action_mask": np.expand_dims(action_mask, axis=0)})
 
     def _get_info(self):
         return {}
@@ -265,19 +267,6 @@ class BriscolaEnv(gym.Env):
         Args:
             state (dict): dict of original state
         '''
-        # 'caller_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'role': spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
-        #                     'player_id': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'briscola_suit': spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
-        #                     'belief': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'current_hand': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'played_cards': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'trace_round': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'winning_card': spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-        #                     'winning_player': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'round_points': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
-        #                     'position': spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
-        #                     'is_last': spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8)
         briscola_suit = state.called_card.suit
         wc, wp = winning(state.trace_round, briscola_suit)
         flattened_trace = [item for round in state.trace for item in round]
@@ -286,7 +275,7 @@ class BriscolaEnv(gym.Env):
         for i, (prev_player, prev_card) in enumerate(state.trace_round):
             points_in_round += CARD_POINTS[prev_card.card.rank]
 
-        encoding = dict(
+        encoding_current_round = dict(
             caller_id=one_hot([state.caller_id], shape=5),
             role=one_hot([state.role.value-1], shape=3),
             player_id=one_hot([state.player_id], shape=5),
@@ -295,8 +284,7 @@ class BriscolaEnv(gym.Env):
             1 else one_hot([state.called_card_player], shape=5),
             current_hand=one_hot([PLAY_ACTION_STR_TO_ID[card.rank + card.suit]
                                  for card in state.current_hand], shape=40),
-            played_cards=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit]
-                                 for _, card in flattened_trace], shape=40),
+
             trace_round=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit]
                                 for _, card in state.trace_round], shape=40),
             winning_card=one_hot([], shape=40) if wc is None else one_hot(
@@ -308,8 +296,37 @@ class BriscolaEnv(gym.Env):
             position=one_hot([len(state.trace_round)], shape=5),
             is_last=len(state.trace_round) == 4,
         )
+
+        if len(state.trace) >= 1:
+            last_round = state.trace[-1]
+            wc, wp = winning(last_round, briscola_suit)
+
+            points_in_round = 0
+            for (_, prev_card) in last_round:
+                points_in_round += CARD_POINTS[prev_card.card.rank]
+
+            encoding_previous_round = dict(
+                played_cards=one_hot([PLAY_ACTION_STR_TO_ID[card.card.rank + card.card.suit]
+                                      for _, card in last_round], shape=40),
+                winning_card=one_hot(
+                    [PLAY_ACTION_STR_TO_ID[wc.rank + wc.suit]], shape=40),
+                winning_player=one_hot([wp], shape=5),
+                round_points=points_in_round/120
+            )
+        else:
+            encoding_previous_round = dict(
+                played_cards=one_hot([], shape=40),
+                winning_card=one_hot([], shape=40),
+                winning_player=one_hot([], shape=5),
+                round_points=0
+            )
+
         # return encoding
-        return spaces.utils.flatten(self._raw_observation_space, encoding)
+        a = spaces.utils.flatten(
+            self._raw_observation_space_current_round, encoding_current_round)
+        b = spaces.utils.flatten(
+            self._raw_observation_space_previous_round, encoding_previous_round)
+        return np.concatenate([a, b])
 
     def _get_payoffs(self):
         ''' Get the payoffs of players. Must be implemented in the child class.

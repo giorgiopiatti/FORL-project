@@ -198,10 +198,7 @@ class BriscolaEnv(gym.Env):
                     )
                 action = self._decode_action(action_t.cpu().numpy().item())
             elif self.agents[current_role] == "random":
-                if state.actions_all_coms is None:
-                    action = self.np_random.choice(state.actions, size=1)[0]
-                else:
-                    action = self.np_random.choice(state.actions_all_coms, size=1)[0]
+                action = self.np_random.choice(state.actions, size=1)[0]
             elif self.agents[current_role] == "random_truth":
                 action = self.np_random.choice(state.actions, size=1)[0]
 
@@ -216,7 +213,8 @@ class BriscolaEnv(gym.Env):
     def reset(self, seed=None, options=None):
         state, player_id = self.game.init_game()
 
-        self._construct_int_name_mappings(self.game.caller_id, self.game.callee_id)
+        self._construct_int_name_mappings(
+            self.game.caller_id, self.game.callee_id)
 
         self._player_id = self._name_to_int(self.role)
 
@@ -234,7 +232,8 @@ class BriscolaEnv(gym.Env):
             action_mask[a.to_action_id()] = 1
 
         return dict(
-            {"observation": self._extract_state(state), "action_mask": action_mask}
+            {"observation": self._extract_state(
+                state), "action_mask": action_mask}
         )
 
     def step(self, action):
