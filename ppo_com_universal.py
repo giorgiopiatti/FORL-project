@@ -79,7 +79,8 @@ def parse_args():
     parser.add_argument("--briscola-communicate-truth-only", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
     parser.add_argument("--briscola-communicate-second-phase", type=int, default=8*5000000)
 
-
+    parser.add_argument("--sample-batch-env", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
+    parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument('--logdir', type=str,
                         default='log/')
     args = parser.parse_args()
@@ -118,22 +119,45 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 
+class CategoricalMasked(Categorical):
+    def __init__(self, probs=None, logits=None, validate_args=None, masks=[]):
+        self.masks = masks
+        if len(self.masks) == 0:
+            super(CategoricalMasked, self).__init__(
+                probs, logits, validate_args)
+        else:
+            self.masks = masks.type(torch.BoolTensor).to(logits.device)
+            logits = torch.where(self.masks, logits,
+                                 torch.tensor(-1e8).to(logits.device))
+            super(CategoricalMasked, self).__init__(
+                probs, logits, validate_args)
+
+    def entropy(self):
+        if len(self.masks) == 0:
+            return super(CategoricalMasked, self).entropy()
+        p_log_p = self.logits * self.probs
+        p_log_p = torch.where(self.masks, p_log_p,
+                              torch.tensor(0.0).to(self.masks.device))
+        return -p_log_p.sum(-1)
+
+
 class Agent(nn.Module):
     def __init__(self, envs):
         super().__init__()
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(args.observation_shape, 64)),
+            layer_init(nn.Linear(args.observation_shape, args.hidden_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(args.hidden_dim, args.hidden_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
+            layer_init(nn.Linear(args.hidden_dim, 1), std=1.0),
         )
         self.actor = nn.Sequential(
-            layer_init(nn.Linear(args.observation_shape, 64)),
+            layer_init(nn.Linear(args.observation_shape, args.hidden_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(args.hidden_dim, args.hidden_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, envs.single_action_space.n), std=0.01),
+            layer_init(nn.Linear(args.hidden_dim,
+                       envs.single_action_space.n), std=0.01),
         )
 
     def get_value(self, x):
@@ -141,11 +165,11 @@ class Agent(nn.Module):
 
     def get_action_and_value(self, x, action_mask, action=None, deterministic=False):
         logits = self.actor(x)
-        logits[~action_mask] = -torch.inf
-        probs = Categorical(logits=logits)
+        probs = CategoricalMasked(logits=logits, masks=action_mask)
         if action is None and not deterministic:
             action = probs.sample()
         if action is None and deterministic:
+            logits[~action_mask] = -torch.inf
             action = logits.argmax(axis=-1)
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
@@ -322,23 +346,6 @@ if __name__ == "__main__":
     optimizer = optim.Adam(
         agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
-    # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs,
-                       args.observation_shape)).to(device)
-    mask = torch.zeros((args.num_steps, args.num_envs,
-                        envs.single_action_space.n), dtype=torch.bool).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) +
-                          envs.single_action_space.shape).to(device)
-    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-
-    # TRY NOT TO MODIFY: start the game
-    data, _ = envs.reset()
-    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
-        data['action_mask'], dtype=torch.bool, device=device)
-    next_done = torch.zeros(args.num_envs).to(device)
     num_updates = args.total_timesteps // args.batch_size
 
     evaluate()
@@ -351,10 +358,31 @@ if __name__ == "__main__":
             old_agents.append(agent.state_dict())
 
         # Set sampled enviroment
-        role_now_training, briscola_agents = pick_random_agents()
+        if args.sample_batch_env:
+            role_now_training, briscola_agents = pick_random_agents()
         for i in range(args.num_envs):
+            if not args.sample_batch_env:
+                role_now_training, briscola_agents = pick_random_agents()
             envs.envs[i].agents = briscola_agents
             envs.envs[i].role = role_now_training
+
+        # ALGO Logic: Storage setup
+        obs = torch.zeros((args.num_steps, args.num_envs,
+                           args.observation_shape)).to(device)
+        mask = torch.zeros((args.num_steps, args.num_envs,
+                            envs.single_action_space.n), dtype=torch.bool).to(device)
+        actions = torch.zeros((args.num_steps, args.num_envs) +
+                              envs.single_action_space.shape).to(device)
+        logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+
+        # TRY NOT TO MODIFY: start the game
+        data, _ = envs.reset()
+        next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+            data['action_mask'], dtype=torch.bool, device=device)
+        next_done = torch.zeros(args.num_envs).to(device)
 
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
