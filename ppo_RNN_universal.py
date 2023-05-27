@@ -122,13 +122,6 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 class Agent(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.network = nn.Sequential(
-            layer_init(nn.Linear(np.prod(env.current_round_shape) +
-                       args.rnn_out_size, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh()
-        )
         self.lstm = nn.LSTM(
             np.prod(env.previous_round_shape), args.rnn_out_size)
         for name, param in self.lstm.named_parameters():
@@ -136,9 +129,25 @@ class Agent(nn.Module):
                 nn.init.constant_(param, 0)
             elif "weight" in name:
                 nn.init.orthogonal_(param, 1.0)
-        self.actor = layer_init(
-            nn.Linear(64, env.num_actions), std=0.01)
-        self.critic = layer_init(nn.Linear(64, 1), std=1)
+
+        self.actor = nn.Sequential(
+            layer_init(nn.Linear(np.prod(env.current_round_shape) +
+                       args.rnn_out_size, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(
+                nn.Linear(64, env.num_actions), std=0.01)
+        )
+
+        self.critic = nn.Sequential(
+            layer_init(nn.Linear(np.prod(env.current_round_shape) +
+                       args.rnn_out_size, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 1), std=1)
+        )
 
         self.offset_round = env.current_round_shape[-1]
 
@@ -159,10 +168,10 @@ class Agent(nn.Module):
             out_lstm += [o]
 
         out_lstm = torch.flatten(torch.cat(out_lstm), 0, 1)
-        tmp = torch.cat([x_features_round.squeeze(1),
-                        out_lstm], dim=1)
-        new_hidden = self.network(tmp)
-        return new_hidden, lstm_state
+        new_hidden = torch.cat([x_features_round.squeeze(1),
+                                out_lstm], dim=1)
+        #new_hidden = self.network(tmp)
+        return new_hidden.squeeze(), lstm_state
 
     def get_value(self, x, lstm_state, done):
         hidden, _ = self.get_states(x, lstm_state, done)
@@ -309,7 +318,8 @@ if __name__ == "__main__":
     old_agents = []
 
     def pick_random_agents():
-        role = np.random.choice(['caller', 'callee', 'good'], size=1)[0]
+        #role = np.random.choice(['caller', 'callee', 'good'], size=1)[0]
+        role = 'caller'
 
         if role == 'good':
             role = np.random.choice(['good_1', 'good_2', 'good_3'], size=1)[0]
