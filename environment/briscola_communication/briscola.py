@@ -3,8 +3,7 @@ import numpy as np
 import functools
 
 import torch
-from agents.heuristic_agent import HeuristicAgent
-
+from agents.heuristic_agent_comm import HeuristicAgent
 from environment.briscola_communication.card import NULLCARD_VECTOR, Card
 from typing import List, Tuple
 from environment.briscola_communication.player_state import BriscolaPlayerState
@@ -201,10 +200,9 @@ class BriscolaEnv(gym.Env):
                 action = self.np_random.choice(state.actions, size=1)[0]
             elif self.agents[current_role] == "random_truth":
                 action = self.np_random.choice(state.actions, size=1)[0]
-
-            # elif isinstance(self.agents[current_role], HeuristicAgent):
-            #     action = self.agents[current_role].get_heuristic_action(
-            #         state, [a.to_action_id() for a in state.actions])
+            elif isinstance(self.agents[current_role], HeuristicAgent):
+                action = self.agents[current_role].get_heuristic_action(
+                    state, [a.to_action_id() for a in state.actions])
             else:
                 raise ValueError(f"self.agents[{current_role}] is invalid")
             state, player_id = self.game.step(action)

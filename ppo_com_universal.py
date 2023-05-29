@@ -12,7 +12,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
-from agents.heuristic_agent import HeuristicAgent
 from environment.briscola_communication.actions import BriscolaCommsAction
 
 
@@ -96,15 +95,18 @@ def parse_args():
     return args
 
 
+ENV_DEVICE = 'cpu'
+
+
 def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_eval=False):
     def thunk():
         if args.briscola_communicate:
             env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu',
+                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE,
                               communication_say_truth=briscola_communicate_truth)
         else:
             env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu')
+                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.seed(seed)
         args.observation_shape = env.observation_shape
@@ -189,7 +191,7 @@ best = {'model_bad_vs_random': 0,
 
 def evaluate(save=False):
     random_model = 'random'
-    agent_cpu = Agent(dummy_envs)
+    agent_cpu = Agent(dummy_envs).to(ENV_DEVICE)
     agent_cpu.load_state_dict(agent.state_dict())
     agent_cpu.eval()
     settings = [
@@ -313,14 +315,15 @@ if __name__ == "__main__":
                     ['random', 'heuristic'], size=1, p=[0.5, 0.5])[0]
             if m == 'old_agent':
                 w = old_agents[np.random.choice(len(old_agents), size=1)[0]]
-                m = Agent(dummy_envs)
+                m = Agent(dummy_envs).to(ENV_DEVICE)
                 m.eval()
                 m.load_state_dict(w)
             elif m == 'heuristic':
                 if args.briscola_communicate:
-                    raise Exception('Not implemented!')
-                    #m = HeuristicAgent()
+                    from agents.heuristic_agent_comm import HeuristicAgent
+                    m = HeuristicAgent()
                 else:
+                    from agents.heuristic_agent import HeuristicAgent
                     m = HeuristicAgent()
             return m
 

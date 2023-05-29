@@ -10,19 +10,21 @@ import random
 rank_list = ['A', '2', '3', '4', '5', '6', '7', 'J', 'Q', 'K']
 suit_list = ['S', 'C', 'D', 'H']
 
-def _decode_action(self, action_id) -> BriscolaAction:
-        ''' Action id -> the action in the game. Must be implemented in the child class.
 
-        Args:
-            action_id (int): the id of the action
+def _decode_action(action_id) -> BriscolaAction:
+    ''' Action id -> the action in the game. Must be implemented in the child class.
 
-        Returns:
-            action : the action that will be passed to the game engine.
-        '''
-        if action_id < 40:
-            return PlayCardAction.from_action_id(action_id)
-        else:
-            return BriscolaCommsAction.from_action_id(action_id)
+    Args:
+        action_id (int): the id of the action
+
+    Returns:
+        action : the action that will be passed to the game engine.
+    '''
+    if action_id < 40:
+        return PlayCardAction.from_action_id(action_id)
+    else:
+        return BriscolaCommsAction.from_action_id(action_id)
+
 
 def wins(card1, card2, index1, index2, briscola_suit):
     winner_card = card1
@@ -56,8 +58,9 @@ class HeuristicAgent:
         is_comm = len(raw_state.comms_round) == 0
 
         if is_comm:
-            for message in range(Messages):
-                logits[BriscolaCommsAction(truth=True, message=message).to_action_id()] = random.random()
+            for message in Messages:
+                logits[BriscolaCommsAction(
+                    truth=True, message=message).to_action_id()] = random.random()
 
         else:
             points_in_round = 0
@@ -72,27 +75,27 @@ class HeuristicAgent:
                         for rank in rank_list:
                             card = rank+suit
                             if CARD_POINTS[rank] < 10:
-                                logits[CARD_STR_TO_NUM[card]] += 5-CARD_POINTS[rank]
+                                logits[CARD_STR_TO_NUM[card]] += 5 - \
+                                    CARD_POINTS[rank]
 
-                if (callee_id != -1 and raw_state.comms_round[callee_id][1].message == Messages.BRISCOLA_FIGURA and raw_state.comms_round[callee_id].positive and callee_id == (caller_id -1) % 5):
+                if (callee_id != -1 and raw_state.comms_round[callee_id][1].message == Messages.BRISCOLA_FIGURA and raw_state.comms_round[callee_id].positive and callee_id == (caller_id - 1) % 5):
                     for rank in ['3', 'A']:
                         for suit in suit_list:
                             if suit != briscola_suit:
                                 card = rank+suit
                                 logits[CARD_STR_TO_NUM[card]] += 5
-                           
+
             else:
                 winner_card = raw_state.trace_round[0][1].card
-                for i, (prev_player, prev_card) in enumerate (raw_state.trace_round):
+                for i, (prev_player, prev_card) in enumerate(raw_state.trace_round):
                     player_id = prev_player.player_id
 
                     if (i >= 1):
-                        winner_card, winner_index = wins(winner_card, prev_card.card, winner_index, player_id, briscola_suit)
-                    
+                        winner_card, winner_index = wins(
+                            winner_card, prev_card.card, winner_index, player_id, briscola_suit)
+
                     points_in_round += CARD_POINTS[prev_card.card.rank]
 
-                
-        
                 if points_in_round >= 20 and winner_index != callee_id:
                     for rank in rank_list:
                         card = rank + briscola_suit
@@ -103,58 +106,66 @@ class HeuristicAgent:
                         if is_last:
                             for rank in rank_list:
                                 card = rank + briscola_suit
-                                w, _ = wins(winner_card, Card(briscola_suit, rank), winner_index, raw_state.player_id, briscola_suit)
+                                w, _ = wins(winner_card, Card(
+                                    briscola_suit, rank), winner_index, raw_state.player_id, briscola_suit)
                                 if (w == Card(briscola_suit, rank)):
-                                    logits[CARD_STR_TO_NUM[card]] += 15 - CARD_RANK_WITHIN_SUIT_INDEX[rank]
+                                    logits[CARD_STR_TO_NUM[card]] += 15 - \
+                                        CARD_RANK_WITHIN_SUIT_INDEX[rank]
                                 else:
-                                    logits[CARD_STR_TO_NUM[card]] -= 15 
-                    
+                                    logits[CARD_STR_TO_NUM[card]] -= 15
+
                         else:
                             for rank in ['J', 'Q', 'K']:
                                 card = rank + briscola_suit
-                                w, _ = wins(winner_card, Card(briscola_suit, rank), winner_index, raw_state.player_id, briscola_suit)
+                                w, _ = wins(winner_card, Card(
+                                    briscola_suit, rank), winner_index, raw_state.player_id, briscola_suit)
                                 if (w == Card(briscola_suit, rank)):
                                     logits[CARD_STR_TO_NUM[card]] += 10
                                 else:
                                     logits[CARD_STR_TO_NUM[card]] -= 20
-                    
+
                     else:
                         if winner_card.rank in ['Q', 'K', '3', 'A'] or is_last:
                             for rank in rank_list:
                                 for suit in suit_list:
                                     if suit != briscola_suit:
                                         card = rank + suit
-                                        logits[CARD_STR_TO_NUM[card]] += 2*CARD_POINTS[rank]
+                                        logits[CARD_STR_TO_NUM[card]
+                                               ] += 2*CARD_POINTS[rank]
                                         if is_last:
                                             logits[CARD_STR_TO_NUM[card]] += 20
-                        
+
                         else:
                             for rank in ['J', 'Q', 'K']:
                                 for suit in suit_list:
                                     if suit != briscola_suit:
                                         card = rank + suit
                                         logits[CARD_STR_TO_NUM[card]] += 5
-                        
+
                 else:
                     for suit in suit_list:
                         if suit != briscola_suit:
                             for rank in rank_list:
                                 card = rank+suit
-                                w, _ = wins(winner_card, Card(suit, rank), winner_index, raw_state.player_id, briscola_suit)
+                                w, _ = wins(winner_card, Card(
+                                    suit, rank), winner_index, raw_state.player_id, briscola_suit)
                                 if (w == winner_card):
-                                    logits[CARD_STR_TO_NUM[card]] += 5-CARD_POINTS[rank]
-                
+                                    logits[CARD_STR_TO_NUM[card]
+                                           ] += 5-CARD_POINTS[rank]
+
                 if is_last and winner_card.suit != briscola_suit:
                     current_suit = raw_state.trace_round[0][1].card.suit
                     for rank in ['3', 'A']:
                         card = rank+current_suit
-                        w, _ = wins(winner_card, Card(current_suit, rank), winner_index, raw_state.player_id, briscola_suit)
+                        w, _ = wins(winner_card, Card(current_suit, rank),
+                                    winner_index, raw_state.player_id, briscola_suit)
                         if (w == Card(current_suit, rank)):
                             logits[CARD_STR_TO_NUM[card]] += 100
 
-            for message in range(Messages):
-                logits[BriscolaCommsAction(truth=False, message=message).to_action_id()] = -np.inf
-                        
+            for message in Messages:
+                logits[BriscolaCommsAction(
+                    truth=False, message=message).to_action_id()] = -np.inf
+
         return logits
 
     def heuristic_callee(self, raw_state):
@@ -235,9 +246,10 @@ class HeuristicAgent:
                             card = rank+suit
                             logits[CARD_STR_TO_NUM[card]] += 5 * \
                                 CARD_POINTS[rank]
-                            
+
         for message in range(Messages):
-            logits[BriscolaCommsAction(truth=False, message=message).to_action_id()] = -np.inf
+            logits[BriscolaCommsAction(
+                truth=False, message=message).to_action_id()] = -np.inf
 
         return logits
 
@@ -300,8 +312,8 @@ class HeuristicAgent:
                                ] -= CARD_POINTS[rank]
                         if suit == briscola_suit:
                             logits[CARD_STR_TO_NUM[card]] += 20
-            
-            if caller_played and callee_played and (winner_index == caller_id or winner_index == callee_id 
+
+            if caller_played and callee_played and (winner_index == caller_id or winner_index == callee_id
                                                     and winner_card.rank in ['2', '4', '5', '6', '7', 'J'] and winner_card.suit == briscola_suit):
                 starting_player = raw_state.trace_round[0][0].player_id
                 next_player = next_pos(raw_state.player_id)
@@ -312,7 +324,8 @@ class HeuristicAgent:
                             for suit in suit_list:
                                 if suit != briscola_suit:
                                     card = rank + suit
-                                    logits[CARD_STR_TO_NUM[card]] += 2*CARD_POINTS[rank]
+                                    logits[CARD_STR_TO_NUM[card]
+                                           ] += 2*CARD_POINTS[rank]
                     next_player = next_pos(next_player)
 
             if (winner_index != caller_id and winner_index != callee_id and callee_id != -1):
@@ -321,16 +334,15 @@ class HeuristicAgent:
                         if suit != briscola_suit:
                             for rank in rank_list:
                                 card = rank + suit
-                                logits[CARD_STR_TO_NUM[card]] += 5*CARD_POINTS[rank]
-                
+                                logits[CARD_STR_TO_NUM[card]] += 5 * \
+                                    CARD_POINTS[rank]
+
                 elif caller_played or callee_played:
                     for rank in ['J', 'Q', 'K']:
                         for suit in suit_list:
                             if suit != briscola_suit:
                                 card = rank + suit
                                 logits[CARD_STR_TO_NUM[card]] += 5
-                
-                            
 
             if points_in_round >= 10 and (winner_index == caller_id or winner_index == callee_id):
                 for suit in suit_list:
@@ -375,10 +387,11 @@ class HeuristicAgent:
                         for rank in rank_list:
                             card = rank + suit
                             w, _ = wins(winner_card, Card(suit, rank),
-                                winner_index, raw_state.player_id, briscola_suit)
+                                        winner_index, raw_state.player_id, briscola_suit)
                             if (w == Card(suit, rank)):
-                                logits[CARD_STR_TO_NUM[card]] += CARD_POINTS[rank]*5
-            
+                                logits[CARD_STR_TO_NUM[card]
+                                       ] += CARD_POINTS[rank]*5
+
             count = 0
             starting_player = raw_state.trace_round[0][0].player_id
             next_player = next_pos(raw_state.player_id)
@@ -388,17 +401,19 @@ class HeuristicAgent:
                 else:
                     count += 1
                 next_player = next_pos(next_player)
-            
+
             if count > 0 and (winner_index == caller_id or winner_index == callee_id):
                 for rank in ['2', '4', '5', '6', '7', 'J']:
-                    card =  rank + briscola_suit
+                    card = rank + briscola_suit
                     w, _ = wins(winner_card, Card(briscola_suit, rank),
-                     winner_index, raw_state.player_id, briscola_suit)
+                                winner_index, raw_state.player_id, briscola_suit)
                     if (w == Card(briscola_suit, rank)):
-                        logits[CARD_STR_TO_NUM[card]] += (10 - CARD_POINTS[rank])
+                        logits[CARD_STR_TO_NUM[card]
+                               ] += (10 - CARD_POINTS[rank])
 
-        for message in range(Messages):
-            logits[BriscolaCommsAction(truth=False, message=message).to_action_id()] = -np.inf
+        for message in Messages:
+            logits[BriscolaCommsAction(
+                truth=False, message=message).to_action_id()] = -np.inf
 
         return logits
 
@@ -417,5 +432,3 @@ class HeuristicAgent:
         logits[~action_mask] = -np.inf
         action = logits.argmax()
         return _decode_action(action)
-    
-    
