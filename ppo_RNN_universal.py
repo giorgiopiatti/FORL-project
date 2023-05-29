@@ -96,15 +96,18 @@ def parse_args():
     return args
 
 
+ENV_DEVICE = 'cpu'
+
+
 def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_eval=False):
     def thunk():
         if args.briscola_communicate:
             env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu',
+                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE,
                               communication_say_truth=briscola_communicate_truth)
         else:
-            env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu')
+            env = BriscolaEnv(1, args.rnn_out_size, normalize_reward=False, render_mode='terminal_env' if verbose else None,
+                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.seed(seed)
         args.observation_shape = env.observation_shape
@@ -117,6 +120,28 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
+
+
+class CategoricalMasked(Categorical):
+    def __init__(self, probs=None, logits=None, validate_args=None, masks=[]):
+        self.masks = masks
+        if len(self.masks) == 0:
+            super(CategoricalMasked, self).__init__(
+                probs, logits, validate_args)
+        else:
+            self.masks = masks.type(torch.BoolTensor).to(logits.device)
+            logits = torch.where(self.masks, logits,
+                                 torch.tensor(-1e8).to(logits.device))
+            super(CategoricalMasked, self).__init__(
+                probs, logits, validate_args)
+
+    def entropy(self):
+        if len(self.masks) == 0:
+            return super(CategoricalMasked, self).entropy()
+        p_log_p = self.logits * self.probs
+        p_log_p = torch.where(self.masks, p_log_p,
+                              torch.tensor(0.0).to(self.masks.device))
+        return -p_log_p.sum(-1)
 
 
 class Agent(nn.Module):
@@ -170,8 +195,7 @@ class Agent(nn.Module):
         out_lstm = torch.flatten(torch.cat(out_lstm), 0, 1)
         new_hidden = torch.cat([x_features_round.squeeze(1),
                                 out_lstm], dim=1)
-        #new_hidden = self.network(tmp)
-        return new_hidden.squeeze(), lstm_state
+        return new_hidden, lstm_state
 
     def get_value(self, x, lstm_state, done):
         hidden, _ = self.get_states(x, lstm_state, done)
@@ -181,11 +205,13 @@ class Agent(nn.Module):
         hidden, lstm_state = self.get_states(x, lstm_state, done)
         action_mask = action_mask.squeeze()
         logits = self.actor(hidden)
-        logits[~action_mask] = -torch.inf
-        probs = Categorical(logits=logits)
+        probs = CategoricalMasked(logits=logits, masks=action_mask)
         if action is None and not deterministic:
             action = probs.sample()
         if action is None and deterministic:
+            if len(action_mask.shape) == 1:
+                action_mask = action_mask.unsqueeze(0)
+            logits[~action_mask] = -torch.inf
             action = logits.argmax(axis=-1)
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden), lstm_state
 
@@ -205,16 +231,16 @@ best = {'model_bad_vs_random': 0,
 
 def evaluate(save=False):
     random_model = 'random'
-    agent_cpu = Agent(dummy_env)
+    agent_cpu = Agent(dummy_env).to(ENV_DEVICE)
     agent_cpu.load_state_dict(agent.state_dict())
     agent_cpu.eval()
     settings = [
         {'name': 'model_bad_vs_random', 'agents': {'callee': random_model,  'good_1': random_model,
                                                    'good_2': random_model, 'good_3': random_model}, 'model': 'caller'},
-        # {'name': 'model_good_vs_random', 'agents': {'caller': random_model, 'callee': random_model,  'good_1': agent_cpu,
-        #                                             'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'good_1'},
-        # {'name': 'model_vs_model', 'agents': {'caller': agent_cpu, 'callee': agent_cpu,  'good_1': agent_cpu,
-        #                                       'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'callee'}
+        {'name': 'model_good_vs_random', 'agents': {'caller': random_model, 'callee': random_model,  'good_1': agent_cpu,
+                                                    'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'good_1'},
+        {'name': 'model_vs_model', 'agents': {'caller': agent_cpu, 'callee': agent_cpu,  'good_1': agent_cpu,
+                                              'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'callee'}
     ]
     for s in settings:
         name = s['name']
@@ -333,7 +359,7 @@ if __name__ == "__main__":
                     ['random', 'heuristic'], size=1, p=[0.5, 0.5])[0]
             if m == 'old_agent':
                 w = old_agents[np.random.choice(len(old_agents), size=1)[0]]
-                m = Agent(dummy_env)
+                m = Agent(dummy_env).to(ENV_DEVICE)
                 m.eval()
                 m.load_state_dict(w)
             elif m == 'heuristic':
@@ -344,10 +370,8 @@ if __name__ == "__main__":
                     m = HeuristicAgent()
             return m
 
-        # agents_env = {'caller': sample_model(), 'callee': sample_model(),  'good_1': sample_model(),
-        #               'good_2': sample_model(), 'good_3': sample_model()}
-        agents_env = {'caller': 'random', 'callee': 'random',  'good_1': 'random',
-                      'good_2': 'random', 'good_3': 'random'}
+        agents_env = {'caller': sample_model(), 'callee': sample_model(),  'good_1': sample_model(),
+                      'good_2': sample_model(), 'good_3': sample_model()}
         del agents_env[role]
         return role, agents_env
 

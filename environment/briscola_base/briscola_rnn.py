@@ -80,7 +80,7 @@ class BriscolaEnv(gym.Env):
 
     '''
 
-    def __init__(self, render_mode=None, role='caller',
+    def __init__(self, lstm_num_layers, lstm_hidden_size, render_mode=None, role='caller',
                  normalize_reward=True,
                  agents={'callee': 'random',  'good_1': 'random',
                          'good_2': 'random', 'good_3': 'random'},
@@ -97,6 +97,8 @@ class BriscolaEnv(gym.Env):
         self.device = device
         self.num_actions = 40
         self.action_space = spaces.Discrete(40)
+        self.lstm_num_layers = lstm_num_layers
+        self.lstm_hidden_size = lstm_hidden_size
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
         self._raw_observation_space_current_round = spaces.Dict({
@@ -169,17 +171,21 @@ class BriscolaEnv(gym.Env):
     def _play_until_is_me(self, state, player_id):
         while player_id != self._player_id and not self.game.is_over():
             current_role = self._int_to_name(player_id)
+            lstm_state = self.lstm_states[current_role]
+            done = torch.zeros((1,)).to(self.device)
             if isinstance(self.agents[current_role], nn.Module):
                 x = self._get_obs(player_id)
                 with torch.no_grad():
-                    action_t, _, _, _ = self.agents[current_role].get_action_and_value(
+                    action_t, _, _, _, next_lstm_state = self.agents[current_role].get_action_and_value(
                         torch.tensor(x['observation'],
-                                     dtype=torch.float, device=self.device),
+                                     dtype=torch.float, device=self.device).unsqueeze(0),
                         torch.tensor(x['action_mask'],
-                                     dtype=torch.bool, device=self.device),
+                                     dtype=torch.bool, device=self.device).unsqueeze(0),
+                        lstm_state, done,
                         deterministic=self.deterministic_eval)
                 action = PlayCardAction.from_action_id(
                     action_t.cpu().numpy().item())
+                self.lstm_states[current_role] = next_lstm_state
             elif isinstance(self.agents[current_role], str) and self.agents[current_role] == 'random':
                 action = state.actions[self.np_random.choice(
                     len(state.actions), size=1)[0]]
@@ -216,6 +222,14 @@ class BriscolaEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         state, player_id = self.game.init_game()
+        self.lstm_states = {
+            agent: (
+                torch.zeros(self.lstm_num_layers, 1,
+                            self.lstm_hidden_size).to(self.device),
+                torch.zeros(self.lstm_num_layers, 1,
+                            self.lstm_hidden_size).to(self.device),
+            ) for agent in self.agents.keys()
+        }
 
         self._construct_int_name_mappings(
             self.game.caller_id, self.game.callee_id)
