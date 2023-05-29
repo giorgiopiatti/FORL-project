@@ -78,7 +78,7 @@ class HeuristicAgent:
                                 logits[CARD_STR_TO_NUM[card]] += 5 - \
                                     CARD_POINTS[rank]
 
-                if (callee_id != -1 and raw_state.comms_round[callee_id][1].message == Messages.BRISCOLA_FIGURA and raw_state.comms_round[callee_id].positive and callee_id == (caller_id - 1) % 5):
+                if (callee_id != -1 and raw_state.comms_round[callee_id][1].message == Messages.BRISCOLA_FIGURA and raw_state.comms_round[callee_id][1].positive and callee_id == (caller_id - 1) % 5):
                     for rank in ['3', 'A']:
                         for suit in suit_list:
                             if suit != briscola_suit:
