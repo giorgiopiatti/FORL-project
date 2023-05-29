@@ -401,12 +401,29 @@
             "program": "${workspaceFolder}/ppo_RNN_universal.py",
             "console": "integratedTerminal",
             "args": [
-                "--num-test-games",
-                "10",
                 "--save-old-model-freq",
                 "5",
                 "--total-timesteps",
                 "800000",
+                "--num-test-games",
+                "10"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo_universal COM",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--save-old-model-freq",
+                "5",
+                "--total-timesteps",
+                "800000",
+                "--num-test-games",
+                "10",
+                "--briscola-communicate",
             ],
             "justMyCode": false
         },
