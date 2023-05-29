@@ -16,7 +16,6 @@ from agents.heuristic_agent import HeuristicAgent
 from environment.briscola_communication.actions import BriscolaCommsAction
 
 
-
 def parse_args():
     # fmt: off
     parser = argparse.ArgumentParser()
@@ -82,7 +81,7 @@ def parse_args():
     parser.add_argument("--briscola-communicate", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
     parser.add_argument("--briscola-communicate-truth-only", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
     parser.add_argument("--briscola-communicate-second-phase", type=int, default=1)
-    
+
     parser.add_argument('--logdir', type=str,
                         default='log/')
     args = parser.parse_args()
@@ -112,11 +111,11 @@ def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_
     def thunk():
         if args.briscola_communicate:
             env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                          role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu', 
-                          communication_say_truth=briscola_communicate_truth)
+                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu',
+                              communication_say_truth=briscola_communicate_truth)
         else:
             env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
-                          role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu')
+                              role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device='cpu')
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.seed(seed)
         args.observation_shape = env.observation_shape
@@ -129,6 +128,28 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
+
+
+class CategoricalMasked(Categorical):
+    def __init__(self, probs=None, logits=None, validate_args=None, masks=[]):
+        self.masks = masks
+        if len(self.masks) == 0:
+            super(CategoricalMasked, self).__init__(
+                probs, logits, validate_args)
+        else:
+            self.masks = masks.type(torch.BoolTensor).to(logits.device)
+            logits = torch.where(self.masks, logits,
+                                 torch.tensor(-1e8).to(logits.device))
+            super(CategoricalMasked, self).__init__(
+                probs, logits, validate_args)
+
+    def entropy(self):
+        if len(self.masks) == 0:
+            return super(CategoricalMasked, self).entropy()
+        p_log_p = self.logits * self.probs
+        p_log_p = torch.where(self.masks, p_log_p,
+                              torch.tensor(0.0).to(self.masks.device))
+        return -p_log_p.sum(-1)
 
 
 class Agent(nn.Module):
@@ -154,11 +175,11 @@ class Agent(nn.Module):
 
     def get_action_and_value(self, x, action_mask, action=None, deterministic=False):
         logits = self.actor(x)
-        logits[~action_mask] = -torch.inf
-        probs = Categorical(logits=logits)
+        probs = CategoricalMasked(logits=logits, masks=action_mask)
         if action is None and not deterministic:
             action = probs.sample()
         if action is None and deterministic:
+            logits[~action_mask] = -torch.inf
             action = logits.argmax(axis=-1)
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
@@ -166,21 +187,28 @@ class Agent(nn.Module):
 def save_model(step='last'):
     for name, agent_env in briscola_agents.items():
         if isinstance(agent_env, nn.Module) and name != role_now_training:
-            model_save_path = os.path.join(log_path, f'{name}_policy_{step}_during_{role_now_training}.pth')
+            model_save_path = os.path.join(
+                log_path, f'{name}_policy_{step}_during_{role_now_training}.pth')
             torch.save(agent_env.state_dict(), model_save_path)
             if args.track:
-                artifact = wandb.Artifact(f'{name}_policy_best_during_{role_now_training}', type='model')
+                artifact = wandb.Artifact(
+                    f'{name}_policy_best_during_{role_now_training}', type='model')
                 artifact.add_file(model_save_path)
                 run.log_artifact(artifact)
-    model_save_path = os.path.join(log_path, f'{role_now_training}_policy_{step}_during_{role_now_training}.pth')
+    model_save_path = os.path.join(
+        log_path, f'{role_now_training}_policy_{step}_during_{role_now_training}.pth')
     torch.save(agent.state_dict(), model_save_path)
     if args.track:
-        artifact = wandb.Artifact(f'{role_now_training}_policy_{step}_during_{role_now_training}', type='model')
+        artifact = wandb.Artifact(
+            f'{role_now_training}_policy_{step}_during_{role_now_training}', type='model')
         artifact.add_file(model_save_path)
         run.log_artifact(artifact)
 
+
 best_bad = 0
 best_good = 0
+
+
 def evaluate(save=False):
     env = gym.vector.SyncVectorEnv(
         [make_env(args.seed+(args.num_generations*args.num_envs)+i, role_now_training, briscola_agents, deterministic_eval=True)
@@ -189,16 +217,17 @@ def evaluate(save=False):
     data, _ = env.reset()
     next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
         data['action_mask'], dtype=torch.bool, device=device)
-    
+
     count_truth_comm = 0
     for step in range(0, args.num_steps):
         # ALGO LOGIC: action logic
         with torch.no_grad():
             action, logprob, _, value = agent.get_action_and_value(
                 next_obs, next_mask, deterministic=True)
-            if args.briscola_communicate and (action >=40).all():
+            if args.briscola_communicate and (action >= 40).all():
                 #Action is communicating
-                count_truth_comm += (action < (40+BriscolaCommsAction.NUM_MESSAGES)).sum()
+                count_truth_comm += (action <
+                                     (40+BriscolaCommsAction.NUM_MESSAGES)).sum()
 
         # TRY NOT TO MODIFY: execute the game and log data.
         data, reward, done, _, info = env.step(action.cpu().numpy())
@@ -207,23 +236,32 @@ def evaluate(save=False):
     metric = None
 
     if args.briscola_communicate:
-        writer.add_scalar(f"test/{role_now_training}/truth_ratio", count_truth_comm/(8.0*args.num_test_games) ,global_step)
+        writer.add_scalar(f"test/{role_now_training}/truth_ratio",
+                          count_truth_comm/(8.0*args.num_test_games), global_step)
 
     if role_now_training in ['caller', 'callee']:
-        writer.add_scalar("test/reward_bad_team_mean", reward.mean(), global_step)
-        writer.add_scalar("test/reward_bad_team_std", reward.std(), global_step)
-        writer.add_scalar("test/reward_good_team_mean", (120.0 - reward).mean(), global_step)
-        writer.add_scalar("test/reward_good_team_std", (120.0 - reward).std(), global_step)
+        writer.add_scalar("test/reward_bad_team_mean",
+                          reward.mean(), global_step)
+        writer.add_scalar("test/reward_bad_team_std",
+                          reward.std(), global_step)
+        writer.add_scalar("test/reward_good_team_mean",
+                          (120.0 - reward).mean(), global_step)
+        writer.add_scalar("test/reward_good_team_std",
+                          (120.0 - reward).std(), global_step)
         metric = reward.mean()
         global best_good
         if metric > best_good and save:
             save_model(step='best')
             best_good = metric
     else:
-        writer.add_scalar("test/reward_good_team_mean", reward.mean(), global_step)
-        writer.add_scalar("test/reward_good_team_std", reward.std(), global_step)
-        writer.add_scalar("test/reward_bad_team_mean", (120.0 - reward).mean(), global_step)
-        writer.add_scalar("test/reward_bad_team_std", (120.0 - reward).std(), global_step)
+        writer.add_scalar("test/reward_good_team_mean",
+                          reward.mean(), global_step)
+        writer.add_scalar("test/reward_good_team_std",
+                          reward.std(), global_step)
+        writer.add_scalar("test/reward_bad_team_mean",
+                          (120.0 - reward).mean(), global_step)
+        writer.add_scalar("test/reward_bad_team_std",
+                          (120.0 - reward).std(), global_step)
         metric = (120.0 - reward).mean()
         global best_bad
         if metric > best_bad and save:
@@ -240,10 +278,10 @@ if __name__ == "__main__":
 
     if args.briscola_communicate:
         from environment.briscola_communication.briscola import BriscolaEnv
-        briscola_communicate_truth = True #Start with true
+        briscola_communicate_truth = True  # Start with true
     else:
         from environment.briscola_base.briscola import BriscolaEnv
-  
+
     if args.track:
         import wandb
 
@@ -281,7 +319,7 @@ if __name__ == "__main__":
     )
     assert isinstance(dummy_envs.single_action_space,
                       gym.spaces.Discrete), "only discrete action space is supported"
-    
+
     # env setup
     if args.briscola_train_mode == 'solo':
         role_now_training = args.briscola_roles_train
@@ -295,7 +333,8 @@ if __name__ == "__main__":
         agent = Agent(dummy_envs).to(device)
 
     elif args.briscola_train_mode == 'bad_multiple_networks':
-        args.num_generations = args.num_generations*len(args.briscola_roles_train)
+        args.num_generations = args.num_generations * \
+            len(args.briscola_roles_train)
         role_now_training = 'caller'
         briscola_agents = {'caller': 'random', 'callee': 'random',  'good_1': 'random',
                            'good_2': 'random', 'good_3': 'random'}
@@ -308,7 +347,8 @@ if __name__ == "__main__":
         briscola_agents['caller'] = agent_caller
 
     elif args.briscola_train_mode == 'bad_single_network':
-        args.num_generations = args.num_generations*len(args.briscola_roles_train)
+        args.num_generations = args.num_generations * \
+            len(args.briscola_roles_train)
         role_now_training = 'caller'
         briscola_agents = {'caller': 'random', 'callee': 'random',  'good_1': 'random',
                            'good_2': 'random', 'good_3': 'random'}
@@ -319,9 +359,8 @@ if __name__ == "__main__":
         agent_old.eval()
         briscola_agents['caller'] = agent
 
-
-    if args.briscola_communicate and ( args.briscola_train_mode == 'bad_single_network' or args.briscola_train_mode == 'bad_multiple_networks') :
-        briscola_agents['callee'] = 'random_truth' # Need to learn messages
+    if args.briscola_communicate and (args.briscola_train_mode == 'bad_single_network' or args.briscola_train_mode == 'bad_multiple_networks'):
+        briscola_agents['callee'] = 'random_truth'  # Need to learn messages
         briscola_agents['good_1'] = 'random_truth'
         briscola_agents['good_2'] = 'random_truth'
         briscola_agents['good_3'] = 'random_truth'
@@ -331,10 +370,11 @@ if __name__ == "__main__":
     start_time = time.time()
     for ngen in range(args.num_generations):
         if args.briscola_train_mode != 'solo':
-            role_now_training = args.briscola_roles_train[ngen%len(args.briscola_roles_train)]
+            role_now_training = args.briscola_roles_train[ngen % len(
+                args.briscola_roles_train)]
         print(f'Now training {role_now_training}')
         if ngen > 0:
-            id_log_model_training = ngen%len(args.briscola_roles_train)
+            id_log_model_training = ngen % len(args.briscola_roles_train)
             if ngen == 1 and args.briscola_train_mode == 'bad_multiple_networks':
                 briscola_agents['callee'] = agent_callee
             if args.briscola_train_mode == 'bad_single_network':
@@ -352,7 +392,7 @@ if __name__ == "__main__":
                     agent = agent_callee
                     agent.to(device)
                     agent_caller.to('cpu')
-            
+
             if ngen >= len(args.briscola_roles_train)*args.briscola_communicate_second_phase:
                 if not args.briscola_communicate_truth_only:
                     briscola_communicate_truth = False
@@ -362,7 +402,7 @@ if __name__ == "__main__":
             [make_env(args.seed + i + args.num_envs*ngen, role_now_training, briscola_agents)
              for i in range(args.num_envs)]
         )
-     
+
         optimizer = optim.Adam(
             agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
@@ -522,7 +562,8 @@ if __name__ == "__main__":
             # TRY NOT TO MODIFY: record rewards for plotting purposes
             writer.add_scalar(f"charts/{role_now_training}/learning_rate",
                               optimizer.param_groups[0]["lr"], global_step)
-            writer.add_scalar(f"losses/{role_now_training}/value_loss", v_loss.item(), global_step)
+            writer.add_scalar(
+                f"losses/{role_now_training}/value_loss", v_loss.item(), global_step)
             writer.add_scalar(f"losses/{role_now_training}/policy_loss",
                               pg_loss.item(), global_step)
             writer.add_scalar(f"losses/{role_now_training}/entropy",

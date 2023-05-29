@@ -369,8 +369,46 @@
             ],
             "justMyCode": false
         },
-
-
-        
+        {
+            "name": "ppo_universal",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--num-test-games",
+                "10",
+                "--save-old-model-freq",
+                "5",
+                "--total-timesteps",
+                "800000",
+                "--track"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "lstm atari",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_atari_lstm_example.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "ppo_universal RNN",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_RNN_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--num-test-games",
+                "10",
+                "--save-old-model-freq",
+                "5",
+                "--total-timesteps",
+                "800000",
+            ],
+            "justMyCode": false
+        },
     ]
 }

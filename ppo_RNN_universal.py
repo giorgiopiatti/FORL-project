@@ -79,8 +79,8 @@ def parse_args():
     parser.add_argument("--briscola-communicate-truth-only", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
     parser.add_argument("--briscola-communicate-second-phase", type=int, default=8*5000000)
 
-    parser.add_argument("--sample-batch-env", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
-    parser.add_argument("--hidden-dim", type=int, default=64)
+    parser.add_argument("--rnn-out-size", type=int, default=128)
+
     parser.add_argument('--logdir', type=str,
                         default='log/')
     args = parser.parse_args()
@@ -119,59 +119,75 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 
-class CategoricalMasked(Categorical):
-    def __init__(self, probs=None, logits=None, validate_args=None, masks=[]):
-        self.masks = masks
-        if len(self.masks) == 0:
-            super(CategoricalMasked, self).__init__(
-                probs, logits, validate_args)
-        else:
-            self.masks = masks.type(torch.BoolTensor).to(logits.device)
-            logits = torch.where(self.masks, logits,
-                                 torch.tensor(-1e8).to(logits.device))
-            super(CategoricalMasked, self).__init__(
-                probs, logits, validate_args)
-
-    def entropy(self):
-        if len(self.masks) == 0:
-            return super(CategoricalMasked, self).entropy()
-        p_log_p = self.logits * self.probs
-        p_log_p = torch.where(self.masks, p_log_p,
-                              torch.tensor(0.0).to(self.masks.device))
-        return -p_log_p.sum(-1)
-
-
 class Agent(nn.Module):
-    def __init__(self, envs):
+    def __init__(self, env):
         super().__init__()
-        self.critic = nn.Sequential(
-            layer_init(nn.Linear(args.observation_shape, args.hidden_dim)),
-            nn.Tanh(),
-            layer_init(nn.Linear(args.hidden_dim, args.hidden_dim)),
-            nn.Tanh(),
-            layer_init(nn.Linear(args.hidden_dim, 1), std=1.0),
-        )
+        self.lstm = nn.LSTM(
+            np.prod(env.previous_round_shape), args.rnn_out_size)
+        for name, param in self.lstm.named_parameters():
+            if "bias" in name:
+                nn.init.constant_(param, 0)
+            elif "weight" in name:
+                nn.init.orthogonal_(param, 1.0)
+
         self.actor = nn.Sequential(
-            layer_init(nn.Linear(args.observation_shape, args.hidden_dim)),
+            layer_init(nn.Linear(np.prod(env.current_round_shape) +
+                       args.rnn_out_size, 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(args.hidden_dim, args.hidden_dim)),
+            layer_init(nn.Linear(64, 64)),
             nn.Tanh(),
-            layer_init(nn.Linear(args.hidden_dim,
-                       envs.single_action_space.n), std=0.01),
+            layer_init(
+                nn.Linear(64, env.num_actions), std=0.01)
         )
 
-    def get_value(self, x):
-        return self.critic(x)
+        self.critic = nn.Sequential(
+            layer_init(nn.Linear(np.prod(env.current_round_shape) +
+                       args.rnn_out_size, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 1), std=1)
+        )
 
-    def get_action_and_value(self, x, action_mask, action=None, deterministic=False):
-        logits = self.actor(x)
-        probs = CategoricalMasked(logits=logits, masks=action_mask)
+        self.offset_round = env.current_round_shape[-1]
+
+    def get_states(self, x, lstm_state, done):
+        x_features_round = x[:, :, :self.offset_round]
+        x_previous_round = x[:, :,  self.offset_round:]
+
+        # LSTM logic
+        batch_size = lstm_state[0].shape[1]
+        x_previous_round = x_previous_round.reshape(
+            (-1, batch_size, self.lstm.input_size))
+        done = done.reshape((-1, batch_size))
+
+        out_lstm = []
+        for xr, d in zip(x_previous_round, done):
+            o, lstm_state = self.lstm(
+                xr.unsqueeze(0),  ((1.0 - d).view(1, -1, 1) * lstm_state[0], (1.0 - d).view(1, -1, 1) * lstm_state[1]))
+            out_lstm += [o]
+
+        out_lstm = torch.flatten(torch.cat(out_lstm), 0, 1)
+        new_hidden = torch.cat([x_features_round.squeeze(1),
+                                out_lstm], dim=1)
+        #new_hidden = self.network(tmp)
+        return new_hidden.squeeze(), lstm_state
+
+    def get_value(self, x, lstm_state, done):
+        hidden, _ = self.get_states(x, lstm_state, done)
+        return self.critic(hidden)
+
+    def get_action_and_value(self, x, action_mask, lstm_state, done, action=None,  deterministic=False):
+        hidden, lstm_state = self.get_states(x, lstm_state, done)
+        action_mask = action_mask.squeeze()
+        logits = self.actor(hidden)
+        logits[~action_mask] = -torch.inf
+        probs = Categorical(logits=logits)
         if action is None and not deterministic:
             action = probs.sample()
         if action is None and deterministic:
-            logits[~action_mask] = -torch.inf
             action = logits.argmax(axis=-1)
-        return action, probs.log_prob(action), probs.entropy(), self.critic(x)
+        return action, probs.log_prob(action), probs.entropy(), self.critic(hidden), lstm_state
 
 
 def save_model(step='last', name=''):
@@ -189,16 +205,16 @@ best = {'model_bad_vs_random': 0,
 
 def evaluate(save=False):
     random_model = 'random'
-    agent_cpu = Agent(dummy_envs)
+    agent_cpu = Agent(dummy_env)
     agent_cpu.load_state_dict(agent.state_dict())
     agent_cpu.eval()
     settings = [
-        {'name': 'model_bad_vs_random', 'agents': {'callee': agent_cpu,  'good_1': random_model,
+        {'name': 'model_bad_vs_random', 'agents': {'callee': random_model,  'good_1': random_model,
                                                    'good_2': random_model, 'good_3': random_model}, 'model': 'caller'},
-        {'name': 'model_good_vs_random', 'agents': {'caller': random_model, 'callee': random_model,  'good_1': agent_cpu,
-                                                    'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'good_1'},
-        {'name': 'model_vs_model', 'agents': {'caller': agent_cpu, 'callee': agent_cpu,  'good_1': agent_cpu,
-                                              'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'callee'}
+        # {'name': 'model_good_vs_random', 'agents': {'caller': random_model, 'callee': random_model,  'good_1': agent_cpu,
+        #                                             'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'good_1'},
+        # {'name': 'model_vs_model', 'agents': {'caller': agent_cpu, 'callee': agent_cpu,  'good_1': agent_cpu,
+        #                                       'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'callee'}
     ]
     for s in settings:
         name = s['name']
@@ -209,22 +225,29 @@ def evaluate(save=False):
         data, _ = env.reset()
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
+        next_lstm_state = (
+            torch.zeros(agent.lstm.num_layers, args.num_test_games,
+                        agent.lstm.hidden_size).to(device),
+            torch.zeros(agent.lstm.num_layers, args.num_test_games,
+                        agent.lstm.hidden_size).to(device),
+        )  # hidden and cell states
+        next_done = torch.zeros(args.num_test_games).to(device)
 
         count_truth_comm = 0
         for step in range(0, args.num_steps):
             # ALGO LOGIC: action logic
             with torch.no_grad():
-                action, logprob, _, value = agent.get_action_and_value(
-                    next_obs, next_mask, deterministic=True)
+                action, logprob, _, value, next_lstm_state = agent.get_action_and_value(
+                    next_obs, next_mask, next_lstm_state, next_done, deterministic=True)
                 if args.briscola_communicate and (action >= 40).all():
-                    #Action is communicating
+                    # Action is communicating
                     count_truth_comm += (action <
                                          (40+BriscolaCommsAction.NUM_MESSAGES)).sum()
 
             # TRY NOT TO MODIFY: execute the game and log data.
             data, reward, done, _, info = env.step(action.cpu().numpy())
-            next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
-                data['action_mask'], dtype=torch.bool, device=device)
+            next_obs, next_mask, next_done = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+                data['action_mask'], dtype=torch.bool, device=device), torch.tensor(done, dtype=torch.float, device=device)
         metric = None
 
         if args.briscola_communicate:
@@ -248,10 +271,11 @@ if __name__ == "__main__":
     os.makedirs(log_path, exist_ok=True)
 
     if args.briscola_communicate:
-        from environment.briscola_communication.briscola import BriscolaEnv
+        # from environment.briscola_communication.briscola import BriscolaEnv
+        raise Exception()
         briscola_communicate_truth = True  # Start with true
     else:
-        from environment.briscola_base.briscola import BriscolaEnv
+        from environment.briscola_base.briscola_rnn import BriscolaEnv
 
     if args.track:
         import wandb
@@ -288,18 +312,14 @@ if __name__ == "__main__":
     device = torch.device(
         "cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
-    dummy_envs = gym.vector.SyncVectorEnv(
-        [make_env(args.seed + i, 'caller', {})
-         for i in range(args.num_envs)]
-    )
-    assert isinstance(dummy_envs.single_action_space,
-                      gym.spaces.Discrete), "only discrete action space is supported"
+    dummy_env = make_env(args.seed, 'caller', {})()
 
     # env setup
     old_agents = []
 
     def pick_random_agents():
-        role = np.random.choice(['caller', 'callee', 'good'], size=1)[0]
+        #role = np.random.choice(['caller', 'callee', 'good'], size=1)[0]
+        role = 'caller'
 
         if role == 'good':
             role = np.random.choice(['good_1', 'good_2', 'good_3'], size=1)[0]
@@ -313,23 +333,25 @@ if __name__ == "__main__":
                     ['random', 'heuristic'], size=1, p=[0.5, 0.5])[0]
             if m == 'old_agent':
                 w = old_agents[np.random.choice(len(old_agents), size=1)[0]]
-                m = Agent(dummy_envs)
+                m = Agent(dummy_env)
                 m.eval()
                 m.load_state_dict(w)
             elif m == 'heuristic':
                 if args.briscola_communicate:
                     raise Exception('Not implemented!')
-                    #m = HeuristicAgent()
+                    # m = HeuristicAgent()
                 else:
                     m = HeuristicAgent()
             return m
 
-        agents_env = {'caller': sample_model(), 'callee': sample_model(),  'good_1': sample_model(),
-                      'good_2': sample_model(), 'good_3': sample_model()}
+        # agents_env = {'caller': sample_model(), 'callee': sample_model(),  'good_1': sample_model(),
+        #               'good_2': sample_model(), 'good_3': sample_model()}
+        agents_env = {'caller': 'random', 'callee': 'random',  'good_1': 'random',
+                      'good_2': 'random', 'good_3': 'random'}
         del agents_env[role]
         return role, agents_env
 
-    agent = Agent(dummy_envs).to(device)
+    agent = Agent(dummy_env).to(device)
     agent.eval()
 
     id_log_model_training = 0
@@ -346,6 +368,30 @@ if __name__ == "__main__":
     optimizer = optim.Adam(
         agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    # ALGO Logic: Storage setup
+    obs = torch.zeros((args.num_steps, args.num_envs)
+                      + args.observation_shape).to(device)
+    mask = torch.zeros((args.num_steps, args.num_envs, 1,
+                       envs.single_action_space.n), dtype=torch.bool).to(device)
+    actions = torch.zeros((args.num_steps, args.num_envs) +
+                          envs.single_action_space.shape).to(device)
+    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+
+    # TRY NOT TO MODIFY: start the game
+    data, _ = envs.reset()
+    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+        data['action_mask'], dtype=torch.bool, device=device)
+    next_done = torch.zeros(args.num_envs).to(device)
+    next_lstm_state = (
+        torch.zeros(agent.lstm.num_layers, args.num_envs,
+                    agent.lstm.hidden_size).to(device),
+        torch.zeros(agent.lstm.num_layers, args.num_envs,
+                    agent.lstm.hidden_size).to(device),
+    )  # hidden and cell states
+
     num_updates = args.total_timesteps // args.batch_size
 
     evaluate()
@@ -358,32 +404,13 @@ if __name__ == "__main__":
             old_agents.append(agent.state_dict())
 
         # Set sampled enviroment
-        if args.sample_batch_env:
-            role_now_training, briscola_agents = pick_random_agents()
+        role_now_training, briscola_agents = pick_random_agents()
         for i in range(args.num_envs):
-            if not args.sample_batch_env:
-                role_now_training, briscola_agents = pick_random_agents()
             envs.envs[i].agents = briscola_agents
             envs.envs[i].role = role_now_training
 
-        # ALGO Logic: Storage setup
-        obs = torch.zeros((args.num_steps, args.num_envs,
-                           args.observation_shape)).to(device)
-        mask = torch.zeros((args.num_steps, args.num_envs,
-                            envs.single_action_space.n), dtype=torch.bool).to(device)
-        actions = torch.zeros((args.num_steps, args.num_envs) +
-                              envs.single_action_space.shape).to(device)
-        logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
-        rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
-        dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
-        values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-
-        # TRY NOT TO MODIFY: start the game
-        data, _ = envs.reset()
-        next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
-            data['action_mask'], dtype=torch.bool, device=device)
-        next_done = torch.zeros(args.num_envs).to(device)
-
+        initial_lstm_state = (
+            next_lstm_state[0].clone(), next_lstm_state[1].clone())
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (update - 1.0) / num_updates
@@ -398,8 +425,8 @@ if __name__ == "__main__":
 
             # ALGO LOGIC: action logic
             with torch.no_grad():
-                action, logprob, _, value = agent.get_action_and_value(
-                    next_obs, next_mask)
+                action, logprob, _, value, next_lstm_state = agent.get_action_and_value(
+                    next_obs, next_mask, next_lstm_state, next_done)
                 values[step] = value.flatten()
             actions[step] = action
             logprobs[step] = logprob
@@ -421,8 +448,11 @@ if __name__ == "__main__":
 
         # bootstrap value if not done
         with torch.no_grad():
-            next_value = agent.get_value(next_obs).reshape(
-                1, -1)  # TODO should we mask something here?
+            next_value = agent.get_value(
+                next_obs,
+                next_lstm_state,
+                next_done,
+            ).reshape(1, -1)
             advantages = torch.zeros_like(rewards).to(device)
             lastgaelam = 0
             for t in reversed(range(args.num_steps)):
@@ -439,26 +469,38 @@ if __name__ == "__main__":
             returns = advantages + values
 
         # flatten the batch
-        b_obs = obs.reshape((-1, args.observation_shape))
-        b_mask = mask.reshape((-1, envs.single_action_space.n))
+        b_obs = obs.reshape((-1,) + args.observation_shape)
+        b_mask = mask.reshape((-1, 1, envs.single_action_space.n))
         b_logprobs = logprobs.reshape(-1)
         b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
+        b_dones = dones.reshape(-1)
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
 
         # Optimizing the policy and value network
         agent.train()
-        b_inds = np.arange(args.batch_size)
+        assert args.num_envs % args.num_minibatches == 0
+        envsperbatch = args.num_envs // args.num_minibatches
+        envinds = np.arange(args.num_envs)
+        flatinds = np.arange(args.batch_size).reshape(
+            args.num_steps, args.num_envs)
         clipfracs = []
         for epoch in range(args.update_epochs):
-            np.random.shuffle(b_inds)
-            for start in range(0, args.batch_size, args.minibatch_size):
-                end = start + args.minibatch_size
-                mb_inds = b_inds[start:end]
+            np.random.shuffle(envinds)
+            for start in range(0, args.num_envs, envsperbatch):
+                end = start + envsperbatch
+                mbenvinds = envinds[start:end]
+                # be really careful about the index
+                mb_inds = flatinds[:, mbenvinds].ravel()
 
-                _, newlogprob, entropy, newvalue = agent.get_action_and_value(
-                    b_obs[mb_inds], b_mask[mb_inds], b_actions.long()[mb_inds])
+                _, newlogprob, entropy, newvalue, _ = agent.get_action_and_value(
+                    b_obs[mb_inds], b_mask[mb_inds],
+                    (initial_lstm_state[0][:, mbenvinds],
+                     initial_lstm_state[1][:, mbenvinds]),
+                    b_dones[mb_inds],
+                    b_actions.long()[mb_inds],
+                )
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()
 
@@ -477,8 +519,7 @@ if __name__ == "__main__":
                 # Policy loss
                 pg_loss1 = -mb_advantages * ratio
                 pg_loss2 = -mb_advantages * \
-                    torch.clamp(ratio, 1 - args.clip_coef,
-                                1 + args.clip_coef)
+                    torch.clamp(ratio, 1 - args.clip_coef, 1 + args.clip_coef)
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
                 # Value loss
@@ -491,8 +532,7 @@ if __name__ == "__main__":
                         args.clip_coef,
                     )
                     v_loss_clipped = (v_clipped - b_returns[mb_inds]) ** 2
-                    v_loss_max = torch.max(
-                        v_loss_unclipped, v_loss_clipped)
+                    v_loss_max = torch.max(v_loss_unclipped, v_loss_clipped)
                     v_loss = 0.5 * v_loss_max.mean()
                 else:
                     v_loss = 0.5 * \
