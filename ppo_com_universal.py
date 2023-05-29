@@ -185,6 +185,79 @@ def save_model(step='last', name=''):
         run.log_artifact(artifact)
 
 
+weights_adversary_elo = None
+elo_adversary = None  # init
+
+
+def evaluate_elo():
+    random_model = 'random'
+    adversary_agent = Agent(dummy_envs).to(ENV_DEVICE)
+    adversary_agent.load_state_dict(weights_adversary_elo)
+    adversary_agent.eval()
+    agent_cpu = Agent(dummy_envs).to(ENV_DEVICE)
+    agent_cpu.load_state_dict(agent.state_dict())
+    agent_cpu.eval()
+
+    # 1 Game
+    config = {'callee': agent_cpu,  'good_1': adversary_agent,
+              'good_2': adversary_agent, 'good_3': adversary_agent}
+    env = gym.vector.SyncVectorEnv(
+        [make_env(args.seed+(args.num_envs)+i, 'caller', config, deterministic_eval=True)
+         for i in range(args.num_test_games)]
+    )
+    data, _ = env.reset()
+    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+        data['action_mask'], dtype=torch.bool, device=device)
+
+    count_truth_comm = 0
+    for step in range(0, args.num_steps):
+        # ALGO LOGIC: action logic
+        with torch.no_grad():
+            action, logprob, _, value = agent.get_action_and_value(
+                next_obs, next_mask, deterministic=True)
+            if args.briscola_communicate and (action >= 40).all():
+                #Action is communicating
+                count_truth_comm += (action <
+                                     (40+BriscolaCommsAction.NUM_MESSAGES)).sum()
+
+        # TRY NOT TO MODIFY: execute the game and log data.
+        data, reward, done, _, info = env.step(action.cpu().numpy())
+        next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+            data['action_mask'], dtype=torch.bool, device=device)
+    reward_bad = reward.mean()
+
+    # 2 Game
+    config = {'callee': adversary_agent,  'caller': agent_cpu,
+              'good_2': agent_cpu, 'good_3': agent_cpu}
+    env = gym.vector.SyncVectorEnv(
+        [make_env(args.seed+(args.num_envs)+i, 'good_1', config, deterministic_eval=True)
+         for i in range(args.num_test_games)]
+    )
+    data, _ = env.reset()
+    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+        data['action_mask'], dtype=torch.bool, device=device)
+
+    count_truth_comm = 0
+    for step in range(0, args.num_steps):
+        # ALGO LOGIC: action logic
+        with torch.no_grad():
+            action, logprob, _, value = agent.get_action_and_value(
+                next_obs, next_mask, deterministic=True)
+            if args.briscola_communicate and (action >= 40).all():
+                #Action is communicating
+                count_truth_comm += (action <
+                                     (40+BriscolaCommsAction.NUM_MESSAGES)).sum()
+
+        # TRY NOT TO MODIFY: execute the game and log data.
+        data, reward, done, _, info = env.step(action.cpu().numpy())
+        next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+            data['action_mask'], dtype=torch.bool, device=device)
+    reward_good = reward.mean()
+
+    # Save
+    weights_adversary_elo = agent.state_dict()
+
+
 best = {'model_bad_vs_random': 0,
         'model_good_vs_random': 0, 'model_vs_model': 0}
 
@@ -352,6 +425,7 @@ if __name__ == "__main__":
     num_updates = args.total_timesteps // args.batch_size
 
     evaluate()
+    weights_adversary_elo = agent.state_dict()
     for update in range(1, num_updates + 1):
 
         # Save old models after each  args.save_old_model_freq  up to args.num_old_models_to_save
@@ -541,10 +615,12 @@ if __name__ == "__main__":
 
         if update % args.freq_eval_test == 0:
             evaluate(save=True)
+            evaluate_elo()
     # End generation
 
     if num_updates % args.freq_eval_test > 0:
         evaluate(save=True)
+        evaluate_elo()
 
     save_model()
     envs.close()
