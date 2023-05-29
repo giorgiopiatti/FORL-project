@@ -186,7 +186,7 @@ def save_model(step='last', name=''):
 
 
 weights_adversary_elo = None
-elo_adversary = None  # init
+elo_adversary = 1000 # init
 
 
 def evaluate_elo():
@@ -253,6 +253,11 @@ def evaluate_elo():
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
     reward_good = reward.mean()
+
+    expected_score = 60
+    mean_reward = (reward_bad+reward_good)/2
+
+    elo_adversary += 10*(mean_reward-expected_score)
 
     # Save
     weights_adversary_elo = agent.state_dict()
