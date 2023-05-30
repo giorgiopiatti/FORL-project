@@ -401,12 +401,12 @@
             "program": "${workspaceFolder}/ppo_RNN_universal.py",
             "console": "integratedTerminal",
             "args": [
-                "--save-old-model-freq",
-                "5",
                 "--total-timesteps",
                 "800000",
                 "--num-test-games",
-                "10"
+                "10",
+                "--freq-eval-test",
+                "100",
             ],
             "justMyCode": false
         },
