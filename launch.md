@@ -70,6 +70,7 @@ sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo_com.py --briscola-train-mode  
 
 
 
-sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo_com_universal.py --track --exp-name PPO_universal_all" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
-
-sbatch --gpus=rtx_2080_ti:1 --wrap="python3 ./ppo_RNN_universal.py --track --exp-name PPO_caller_RNN" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
+sbatch --gpus=1 --gres=gpumem:20g --wrap="python3 ./ppo_com_universal.py --track --exp-name PPO_universal_all" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
+sbatch --gpus=1 --gres=gpumem:20g--wrap="python3 ./ppo_com_universal.py --track --exp-name PPO_universal_all_more_samples --sample-batch-env" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
+sbatch  --gpus=1 --gres=gpumem:20g --wrap="python3 ./ppo_com_universal.py --track --exp-name PPO_universal_all_more_samples_d=128 --sample-batch-env --hidden-dim 128" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon
+sbatch --gpus=1 --gres=gpumem:20g --wrap="python3 ./ppo_com_universal.py --track --exp-name PPO_universal_all_d=128 --hidden-dim 128" --time=48:00:00 --ntasks-per-node=1 --mem-per-cpu=2GB --cpus-per-task=16 -A ls_lawecon

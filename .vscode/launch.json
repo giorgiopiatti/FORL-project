@@ -411,6 +411,23 @@
             "justMyCode": false
         },
         {
+            "name": "ppo_universal RNN COM",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_RNN_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--total-timesteps",
+                "800000",
+                "--num-test-games",
+                "10",
+                "--freq-eval-test",
+                "100",
+                "--briscola-communicate"
+            ],
+            "justMyCode": false
+        },
+        {
             "name": "ppo_universal COM",
             "type": "python",
             "request": "launch",
