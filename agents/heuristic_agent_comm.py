@@ -247,7 +247,7 @@ class HeuristicAgent:
                             logits[CARD_STR_TO_NUM[card]] += 5 * \
                                 CARD_POINTS[rank]
 
-        for message in range(Messages):
+        for message in Messages:
             logits[BriscolaCommsAction(
                 truth=False, message=message).to_action_id()] = -np.inf
 
