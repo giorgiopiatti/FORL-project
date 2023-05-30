@@ -88,6 +88,8 @@ class BriscolaEnv(gym.Env):
 
     def __init__(
         self,
+        lstm_num_layers,
+        lstm_hidden_size,
         render_mode=None,
         role="caller",
         normalize_reward=True,
@@ -115,9 +117,11 @@ class BriscolaEnv(gym.Env):
         self.device = device
         self.num_actions = 40 + 10
         self.action_space = spaces.Discrete(self.num_actions)
+        self.lstm_num_layers = lstm_num_layers
+        self.lstm_hidden_size = lstm_hidden_size
 
         # gymnasium spaces are defined and documented here: https://gymnasium.farama.org/api/spaces/
-        self._raw_observation_space = spaces.Dict(
+        self._raw_observation_space_current_round = spaces.Dict(
             {
                 "caller_id": spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
                 "role": spaces.Box(low=0, high=1, shape=(3,), dtype=np.int8),
@@ -125,7 +129,6 @@ class BriscolaEnv(gym.Env):
                 "briscola_suit": spaces.Box(low=0, high=1, shape=(4,), dtype=np.int8),
                 "belief": spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
                 "current_hand": spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
-                "played_cards": spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
                 "trace_round": spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
                 "winning_card": spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
                 "winning_player": spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
@@ -138,21 +141,57 @@ class BriscolaEnv(gym.Env):
                 ),
             }
         )
+
+        self._raw_observation_space_previous_round = spaces.Dict(
+            {
+                "played_cards": spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+                "winning_card": spaces.Box(low=0, high=1, shape=(40,), dtype=np.int8),
+                "winning_player": spaces.Box(low=0, high=1, shape=(5,), dtype=np.int8),
+                "round_points": spaces.Box(low=0, high=1, shape=(1,), dtype=np.int8),
+                "comms_round": spaces.Box(
+                    low=-1, high=1, shape=(5 * 5,), dtype=np.int8
+                ),
+            }
+        )
+
+        self.current_round_shape = (
+            1,
+            spaces.flatdim(self._raw_observation_space_current_round),
+        )
+
+        self.previous_round_shape = (
+            1,
+            spaces.flatdim(self._raw_observation_space_previous_round),
+        )
+
+        dim = spaces.flatdim(
+            self._raw_observation_space_previous_round
+        ) + spaces.flatdim(self._raw_observation_space_current_round)
+
         self.observation_space = spaces.Dict(
             {
                 "observation": spaces.Box(
                     low=0,
                     high=1,
-                    shape=(spaces.flatdim(self._raw_observation_space),),
+                    shape=(
+                        1,
+                        dim,
+                    ),
                     dtype=np.int8,
                 ),
                 "action_mask": spaces.Box(
-                    low=0, high=1, shape=(self.num_actions,), dtype=np.int8
+                    low=0,
+                    high=1,
+                    shape=(
+                        1,
+                        self.num_actions,
+                    ),
+                    dtype=np.int8,
                 ),
             }
         )
 
-        self.observation_shape = spaces.flatdim(self._raw_observation_space)
+        self.observation_shape = (1, dim)
         self.render_mode = render_mode
 
     def render(self):
@@ -183,26 +222,37 @@ class BriscolaEnv(gym.Env):
     def _play_until_is_me(self, state: BriscolaPlayerState, player_id):
         while player_id != self._player_id and not self.game.is_over():
             current_role = self._int_to_name(player_id)
+            lstm_state = self.lstm_states[current_role]
+            done = torch.zeros((1,)).to(self.device)
             if isinstance(self.agents[current_role], nn.Module):
                 x = self._get_obs(player_id)
                 with torch.no_grad():
-                    action_t, _, _, _ = self.agents[current_role].get_action_and_value(
+                    action_t, _, _, _, next_lstm_state = self.agents[
+                        current_role
+                    ].get_action_and_value(
                         torch.tensor(
                             x["observation"], dtype=torch.float, device=self.device
-                        ),
+                        ).unsqueeze(0),
                         torch.tensor(
                             x["action_mask"], dtype=torch.bool, device=self.device
-                        ),
+                        ).unsqueeze(0),
+                        lstm_state,
+                        done,
                         deterministic=self.deterministic_eval,
                     )
                 action = self._decode_action(action_t.cpu().numpy().item())
-            elif self.agents[current_role] == "random":
-                action = self.np_random.choice(state.actions, size=1)[0]
-            elif self.agents[current_role] == "random_truth":
-                action = self.np_random.choice(state.actions, size=1)[0]
+                self.lstm_states[current_role] = next_lstm_state
+            elif (
+                isinstance(self.agents[current_role], str)
+                and self.agents[current_role] == "random"
+            ):
+                action = state.actions[
+                    self.np_random.choice(len(state.actions), size=1)[0]
+                ]
             elif isinstance(self.agents[current_role], HeuristicAgent):
                 action = self.agents[current_role].get_heuristic_action(
-                    state, [a.to_action_id() for a in state.actions])
+                    state, [a.to_action_id() for a in state.actions]
+                )
             else:
                 raise ValueError(f"self.agents[{current_role}] is invalid")
             state, player_id = self.game.step(action)
@@ -210,9 +260,19 @@ class BriscolaEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         state, player_id = self.game.init_game()
+        self.lstm_states = {
+            agent: (
+                torch.zeros(self.lstm_num_layers, 1, self.lstm_hidden_size).to(
+                    self.device
+                ),
+                torch.zeros(self.lstm_num_layers, 1, self.lstm_hidden_size).to(
+                    self.device
+                ),
+            )
+            for agent in self.agents.keys()
+        }
 
-        self._construct_int_name_mappings(
-            self.game.caller_id, self.game.callee_id)
+        self._construct_int_name_mappings(self.game.caller_id, self.game.callee_id)
 
         self._player_id = self._name_to_int(self.role)
 
@@ -230,8 +290,10 @@ class BriscolaEnv(gym.Env):
             action_mask[a.to_action_id()] = 1
 
         return dict(
-            {"observation": self._extract_state(
-                state), "action_mask": action_mask}
+            {
+                "observation": np.expand_dims(self._extract_state(state), axis=0),
+                "action_mask": np.expand_dims(action_mask, axis=0),
+            }
         )
 
     def step(self, action):
@@ -277,7 +339,7 @@ class BriscolaEnv(gym.Env):
                 1 if comm.positive else -1
             )
 
-        encoding = dict(
+        encoding_current_round = dict(
             caller_id=one_hot([state.caller_id], shape=5),
             role=one_hot([state.role.value - 1], shape=3),
             player_id=one_hot([state.player_id], shape=5),
@@ -287,9 +349,6 @@ class BriscolaEnv(gym.Env):
             else one_hot([state.called_card_player], shape=5),
             current_hand=one_hot(
                 [card.to_num() for card in state.current_hand], shape=40
-            ),
-            played_cards=one_hot(
-                [card.to_num() for _, card in flattened_trace], shape=40
             ),
             trace_round=one_hot(
                 [card.to_num() for _, card in state.trace_round], shape=40
@@ -306,8 +365,47 @@ class BriscolaEnv(gym.Env):
             is_last=len(state.trace_round) == 4,
             comms_round=comms,
         )
+
+        if len(state.trace) >= 1:
+            comms = np.zeros((5 * 5,))
+            for player, comm in state.trace_comms[-1]:
+                comms[player.player_id * 5 + comm.message.value] = (
+                    1 if comm.positive else -1
+                )
+
+            last_round = state.trace[-1]
+            wc, wp = winning(last_round, briscola_suit)
+
+            points_in_round = 0
+            for _, prev_card in last_round:
+                points_in_round += CARD_POINTS[prev_card.card.rank]
+
+            encoding_previous_round = dict(
+                played_cards=one_hot(
+                    [card.card.to_num() for _, card in last_round], shape=40
+                ),
+                winning_card=one_hot([wc.to_num()], shape=40),
+                winning_player=one_hot([wp], shape=5),
+                round_points=points_in_round / 120,
+                comms_round=comms,
+            )
+        else:
+            encoding_previous_round = dict(
+                played_cards=one_hot([], shape=40),
+                winning_card=one_hot([], shape=40),
+                winning_player=one_hot([], shape=5),
+                round_points=0,
+                comms_round=one_hot([], shape=25)
+            )
+
         # return encoding
-        return spaces.utils.flatten(self._raw_observation_space, encoding)
+        a = spaces.utils.flatten(
+            self._raw_observation_space_current_round, encoding_current_round
+        )
+        b = spaces.utils.flatten(
+            self._raw_observation_space_previous_round, encoding_previous_round
+        )
+        return np.concatenate([a, b])
 
     def _decode_action(self, action_id) -> BriscolaAction:
         """Action id -> the action in the game. Must be implemented in the child class.

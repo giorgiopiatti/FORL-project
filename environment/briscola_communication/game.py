@@ -146,6 +146,7 @@ class BriscolaGame:
 
             if not self.round.communication_phase:
                 self.public.comms_round = self.round.comms
+                self.public.trace_comms.append(self.round.comms)
                 self.log("----- COMMS END ----")
 
             state = self.get_state(self.round.current_player)

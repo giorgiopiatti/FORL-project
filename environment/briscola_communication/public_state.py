@@ -19,7 +19,7 @@ class BriscolaPublicState:
     called_card_player: int
 
     comms_round: List[Tuple[int, BriscolaCommsAction]]
-
+    trace_comms: List[List[Tuple[int, BriscolaCommsAction]]]
     round_order : List[int]
 
     def __init__(self, caller_id, caller_points_bet, called_card) -> None:
@@ -31,3 +31,4 @@ class BriscolaPublicState:
         self.points = [0, 0, 0, 0, 0]
         self.called_card_player = -1
         self.comms_round = []
+        self.trace_comms = []

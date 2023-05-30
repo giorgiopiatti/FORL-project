@@ -106,7 +106,7 @@ ENV_DEVICE = 'cpu'
 def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_eval=False):
     def thunk():
         if args.briscola_communicate:
-            env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
+            env = BriscolaEnv(1, args.rnn_out_size, normalize_reward=False, render_mode='terminal_env' if verbose else None,
                               role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE,
                               communication_say_truth=briscola_communicate_truth)
         else:
@@ -410,8 +410,7 @@ if __name__ == "__main__":
     os.makedirs(log_path, exist_ok=True)
 
     if args.briscola_communicate:
-        # from environment.briscola_communication.briscola import BriscolaEnv
-        raise Exception()
+        from environment.briscola_communication.briscola_rnn import BriscolaEnv
         briscola_communicate_truth = True  # Start with true
     else:
         from environment.briscola_base.briscola_rnn import BriscolaEnv
@@ -458,8 +457,7 @@ if __name__ == "__main__":
     old_agents = []
 
     def pick_random_agents():
-        #role = np.random.choice(['caller', 'callee', 'good'], size=1)[0]
-        role = 'caller'
+        role = np.random.choice(['caller', 'callee', 'good'], size=1)[0]
 
         if role == 'good':
             role = np.random.choice(['good_1', 'good_2', 'good_3'], size=1)[0]
@@ -478,9 +476,10 @@ if __name__ == "__main__":
                 m.load_state_dict(w)
             elif m == 'heuristic':
                 if args.briscola_communicate:
-                    raise Exception('Not implemented!')
-                    # m = HeuristicAgent()
+                    from agents.heuristic_agent_comm import HeuristicAgent
+                    m = HeuristicAgent()
                 else:
+                    from agents.heuristic_agent import HeuristicAgent
                     m = HeuristicAgent()
             return m
 

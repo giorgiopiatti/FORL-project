@@ -29,6 +29,7 @@ class BriscolaPlayerState:
     actions_all_coms: List[BriscolaAction]
 
     comms_round: List[Tuple[int, BriscolaCommsAction]]
+    trace_comms: List[List[Tuple[int, BriscolaCommsAction]]]
 
     def __init__(
         self,
@@ -47,6 +48,7 @@ class BriscolaPlayerState:
         self.trace = public.trace
         self.trace_round = public.trace_round
         self.comms_round = public.comms_round
+        self.trace_comms = public.trace_comms
         self.points = public.points
         self.called_card_player = public.called_card_player
 
