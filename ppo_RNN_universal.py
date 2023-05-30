@@ -4,6 +4,7 @@ import os
 import random
 import time
 from distutils.util import strtobool
+import copy
 
 import gymnasium as gym
 import numpy as np
@@ -71,6 +72,7 @@ def parse_args():
         help="")
     parser.add_argument("--freq-eval-test", type=int, default=1000,
         help="")
+    parser.add_argument("--freq-save-model", type=int, default=100000, help= "")
     parser.add_argument("--save-old-model-freq", type=int, default=500,
         help="")
     parser.add_argument("--num-old-models-to-save", type=int, default=2, help="")
@@ -79,7 +81,9 @@ def parse_args():
     parser.add_argument("--briscola-communicate-truth-only", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
     parser.add_argument("--briscola-communicate-second-phase", type=int, default=8*5000000)
 
-    parser.add_argument("--rnn-out-size", type=int, default=128)
+    parser.add_argument("--rnn-out-size", type=int, default=64)
+    parser.add_argument("--sample-batch-env", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
+    parser.add_argument("--hidden-dim", type=int, default=64)
 
     parser.add_argument('--logdir', type=str,
                         default='log/')
@@ -157,21 +161,21 @@ class Agent(nn.Module):
 
         self.actor = nn.Sequential(
             layer_init(nn.Linear(np.prod(env.current_round_shape) +
-                       args.rnn_out_size, 64)),
+                       args.rnn_out_size, args.hidden_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(args.hidden_dim, args.hidden_dim)),
             nn.Tanh(),
             layer_init(
-                nn.Linear(64, env.num_actions), std=0.01)
+                nn.Linear(args.hidden_dim, env.num_actions), std=0.01)
         )
 
         self.critic = nn.Sequential(
             layer_init(nn.Linear(np.prod(env.current_round_shape) +
-                       args.rnn_out_size, 64)),
+                       args.rnn_out_size, args.hidden_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(args.hidden_dim, args.hidden_dim)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1)
+            layer_init(nn.Linear(args.hidden_dim, 1), std=1)
         )
 
         self.offset_round = env.current_round_shape[-1]
@@ -216,13 +220,123 @@ class Agent(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(hidden), lstm_state
 
 
-def save_model(step='last', name=''):
-    model_save_path = os.path.join(log_path, f'{name}_policy_{step}.pth')
-    torch.save(agent.state_dict(), model_save_path)
+def save_model(step='last'):
+    model_save_path = os.path.join(
+        log_path, f'policy_{step}_{global_step}.pth')
+    torch.save(
+        {
+            'global_step': global_step,
+            'model_state_dict': agent.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'lr': optimizer.param_groups[0]["lr"]
+        },
+        model_save_path
+    )
     if args.track:
-        artifact = wandb.Artifact(f'{name}_policy_{step}', type='model')
+        artifact = wandb.Artifact(
+            f'policy_{step}_{global_step}', type='model')
         artifact.add_file(model_save_path)
         run.log_artifact(artifact)
+
+
+weights_adversary_elo = None
+elo_adversary = 1000  # init
+
+
+def evaluate_elo():
+    global elo_adversary
+    global weights_adversary_elo
+    adversary_agent = Agent(dummy_env).to(ENV_DEVICE)
+    adversary_agent.load_state_dict(weights_adversary_elo)
+    adversary_agent.eval()
+    agent_cpu = Agent(dummy_env).to(ENV_DEVICE)
+    agent_cpu.load_state_dict(agent.state_dict())
+    agent_cpu.eval()
+
+    # 1 Game
+    config = {'callee': agent_cpu,  'good_1': adversary_agent,
+              'good_2': adversary_agent, 'good_3': adversary_agent}
+    env = gym.vector.SyncVectorEnv(
+        [make_env(args.seed+(args.num_envs)+i, 'caller', config, deterministic_eval=True)
+         for i in range(args.num_test_games)]
+    )
+    data, _ = env.reset()
+    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+        data['action_mask'], dtype=torch.bool, device=device)
+    next_lstm_state = (
+        torch.zeros(agent.lstm.num_layers, args.num_test_games,
+                    agent.lstm.hidden_size).to(device),
+        torch.zeros(agent.lstm.num_layers, args.num_test_games,
+                    agent.lstm.hidden_size).to(device),
+    )  # hidden and cell states
+    next_done = torch.zeros(args.num_test_games).to(device)
+
+    count_truth_comm = 0
+    for step in range(0, args.num_steps):
+        # ALGO LOGIC: action logic
+        with torch.no_grad():
+            action, logprob, _, value, next_lstm_state = agent.get_action_and_value(
+                next_obs, next_mask, next_lstm_state, next_done, deterministic=True)
+            if args.briscola_communicate and (action >= 40).all():
+                # Action is communicating
+                count_truth_comm += (action <
+                                     (40+BriscolaCommsAction.NUM_MESSAGES)).sum()
+
+        # TRY NOT TO MODIFY: execute the game and log data.
+        data, reward, done, _, info = env.step(action.cpu().numpy())
+        next_obs, next_mask, next_done = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+            data['action_mask'], dtype=torch.bool, device=device), torch.tensor(done, dtype=torch.float, device=device)
+
+    reward_bad = reward.mean()
+    if args.briscola_communicate:
+        writer.add_scalar(f"test/truth_ratio_ELO_caller",
+                          count_truth_comm/(8.0*args.num_test_games), global_step)
+
+    # 2 Game
+    config = {'callee': adversary_agent,  'caller': adversary_agent,
+              'good_2': agent_cpu, 'good_3': agent_cpu}
+    env = gym.vector.SyncVectorEnv(
+        [make_env(args.seed+(args.num_envs)+i, 'good_1', config, deterministic_eval=True)
+         for i in range(args.num_test_games)]
+    )
+    data, _ = env.reset()
+    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+        data['action_mask'], dtype=torch.bool, device=device)
+    next_lstm_state = (
+        torch.zeros(agent.lstm.num_layers, args.num_test_games,
+                    agent.lstm.hidden_size).to(device),
+        torch.zeros(agent.lstm.num_layers, args.num_test_games,
+                    agent.lstm.hidden_size).to(device),
+    )  # hidden and cell states
+    next_done = torch.zeros(args.num_test_games).to(device)
+
+    count_truth_comm = 0
+    for step in range(0, args.num_steps):
+        # ALGO LOGIC: action logic
+        with torch.no_grad():
+            action, logprob, _, value, next_lstm_state = agent.get_action_and_value(
+                next_obs, next_mask, next_lstm_state, next_done, deterministic=True)
+            if args.briscola_communicate and (action >= 40).all():
+                # Action is communicating
+                count_truth_comm += (action <
+                                     (40+BriscolaCommsAction.NUM_MESSAGES)).sum()
+
+        # TRY NOT TO MODIFY: execute the game and log data.
+        data, reward, done, _, info = env.step(action.cpu().numpy())
+        next_obs, next_mask, next_done = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+            data['action_mask'], dtype=torch.bool, device=device), torch.tensor(done, dtype=torch.float, device=device)
+    reward_good = reward.mean()
+    if args.briscola_communicate:
+        writer.add_scalar(f"test/truth_ratio_ELO_good",
+                          count_truth_comm/(8.0*args.num_test_games), global_step)
+
+    expected_score = 60
+    mean_reward = (reward_bad+reward_good)/2
+
+    elo_adversary += 10*(mean_reward-expected_score)
+    writer.add_scalar(f"test/ELO", elo_adversary, global_step)
+    # Save
+    weights_adversary_elo = copy.deepcopy(agent.state_dict())
 
 
 best = {'model_bad_vs_random': 0,
@@ -286,7 +400,6 @@ def evaluate(save=False):
                           reward.std(), global_step)
         metric = reward.mean()
         if metric > best[name] and save:
-            save_model(step='best', name=name)
             best[name] = metric
 
 
@@ -321,6 +434,7 @@ if __name__ == "__main__":
         wandb.define_metric(
             f"test/reward_model_good_vs_random_mean", summary="max")
         wandb.define_metric(f"test/reward_model_vs_model_mean", summary="max")
+        wandb.define_metric("test/ELO", summary="max")
 
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -392,46 +506,48 @@ if __name__ == "__main__":
     optimizer = optim.Adam(
         agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
-    # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs)
-                      + args.observation_shape).to(device)
-    mask = torch.zeros((args.num_steps, args.num_envs, 1,
-                       envs.single_action_space.n), dtype=torch.bool).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) +
-                          envs.single_action_space.shape).to(device)
-    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
-    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
-
-    # TRY NOT TO MODIFY: start the game
-    data, _ = envs.reset()
-    next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
-        data['action_mask'], dtype=torch.bool, device=device)
-    next_done = torch.zeros(args.num_envs).to(device)
-    next_lstm_state = (
-        torch.zeros(agent.lstm.num_layers, args.num_envs,
-                    agent.lstm.hidden_size).to(device),
-        torch.zeros(agent.lstm.num_layers, args.num_envs,
-                    agent.lstm.hidden_size).to(device),
-    )  # hidden and cell states
-
     num_updates = args.total_timesteps // args.batch_size
 
     evaluate()
+    weights_adversary_elo = copy.deepcopy(agent.state_dict())
     for update in range(1, num_updates + 1):
-
         # Save old models after each  args.save_old_model_freq  up to args.num_old_models_to_save
         if update % args.save_old_model_freq == 0:
             if len(old_agents) == args.num_old_models_to_save:
                 old_agents.pop(0)
-            old_agents.append(agent.state_dict())
+            old_agents.append(copy.deepcopy(agent.state_dict()))
 
         # Set sampled enviroment
-        role_now_training, briscola_agents = pick_random_agents()
+        if args.sample_batch_env:
+            role_now_training, briscola_agents = pick_random_agents()
         for i in range(args.num_envs):
+            if not args.sample_batch_env:
+                role_now_training, briscola_agents = pick_random_agents()
             envs.envs[i].agents = briscola_agents
             envs.envs[i].role = role_now_training
+
+        # ALGO Logic: Storage setup
+        obs = torch.zeros((args.num_steps, args.num_envs)
+                          + args.observation_shape).to(device)
+        mask = torch.zeros((args.num_steps, args.num_envs, 1,
+                            envs.single_action_space.n), dtype=torch.bool).to(device)
+        actions = torch.zeros((args.num_steps, args.num_envs) +
+                              envs.single_action_space.shape).to(device)
+        logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+        # TRY NOT TO MODIFY: start the game
+        data, _ = envs.reset()
+        next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
+            data['action_mask'], dtype=torch.bool, device=device)
+        next_done = torch.zeros(args.num_envs).to(device)
+        next_lstm_state = (
+            torch.zeros(agent.lstm.num_layers, args.num_envs,
+                        agent.lstm.hidden_size).to(device),
+            torch.zeros(agent.lstm.num_layers, args.num_envs,
+                        agent.lstm.hidden_size).to(device),
+        )  # hidden and cell states
 
         initial_lstm_state = (
             next_lstm_state[0].clone(), next_lstm_state[1].clone())
@@ -601,11 +717,15 @@ if __name__ == "__main__":
                                             (time.time() - start_time)), global_step)
 
         if update % args.freq_eval_test == 0:
-            evaluate(save=True)
+            evaluate()
+            evaluate_elo()
+        if update % args.freq_save_model == 0:
+            save_model('train')
     # End generation
 
     if num_updates % args.freq_eval_test > 0:
-        evaluate(save=True)
+        evaluate()
+        evaluate_elo()
 
     save_model()
     envs.close()

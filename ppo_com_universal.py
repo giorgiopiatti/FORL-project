@@ -4,7 +4,7 @@ import os
 import random
 import time
 from distutils.util import strtobool
-
+import copy
 import gymnasium as gym
 import numpy as np
 import torch
@@ -70,6 +70,7 @@ def parse_args():
         help="")
     parser.add_argument("--freq-eval-test", type=int, default=1000,
         help="")
+    parser.add_argument("--freq-save-model", type=int, default=100000, help= "")
     parser.add_argument("--save-old-model-freq", type=int, default=500,
         help="")
     parser.add_argument("--num-old-models-to-save", type=int, default=2, help="")
@@ -176,21 +177,32 @@ class Agent(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
 
-def save_model(step='last', name=''):
-    model_save_path = os.path.join(log_path, f'{name}_policy_{step}.pth')
-    torch.save(agent.state_dict(), model_save_path)
+def save_model(step='last'):
+    model_save_path = os.path.join(
+        log_path, f'policy_{step}_{global_step}.pth')
+    torch.save(
+        {
+            'global_step': global_step,
+            'model_state_dict': agent.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'lr': optimizer.param_groups[0]["lr"]
+        },
+        model_save_path
+    )
     if args.track:
-        artifact = wandb.Artifact(f'{name}_policy_{step}', type='model')
+        artifact = wandb.Artifact(
+            f'policy_{step}_{global_step}', type='model')
         artifact.add_file(model_save_path)
         run.log_artifact(artifact)
 
 
 weights_adversary_elo = None
-elo_adversary = 1000 # init
+elo_adversary = 1000  # init
 
 
 def evaluate_elo():
-    random_model = 'random'
+    global elo_adversary
+    global weights_adversary_elo
     adversary_agent = Agent(dummy_envs).to(ENV_DEVICE)
     adversary_agent.load_state_dict(weights_adversary_elo)
     adversary_agent.eval()
@@ -225,9 +237,12 @@ def evaluate_elo():
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
     reward_bad = reward.mean()
+    if args.briscola_communicate:
+        writer.add_scalar(f"test/truth_ratio_ELO_caller",
+                          count_truth_comm/(8.0*args.num_test_games), global_step)
 
     # 2 Game
-    config = {'callee': adversary_agent,  'caller': agent_cpu,
+    config = {'callee': adversary_agent,  'caller': adversary_agent,
               'good_2': agent_cpu, 'good_3': agent_cpu}
     env = gym.vector.SyncVectorEnv(
         [make_env(args.seed+(args.num_envs)+i, 'good_1', config, deterministic_eval=True)
@@ -253,14 +268,17 @@ def evaluate_elo():
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
     reward_good = reward.mean()
+    if args.briscola_communicate:
+        writer.add_scalar(f"test/truth_ratio_ELO_good",
+                          count_truth_comm/(8.0*args.num_test_games), global_step)
 
     expected_score = 60
     mean_reward = (reward_bad+reward_good)/2
 
     elo_adversary += 10*(mean_reward-expected_score)
-
+    writer.add_scalar(f"test/ELO", elo_adversary, global_step)
     # Save
-    weights_adversary_elo = agent.state_dict()
+    weights_adversary_elo = copy.deepcopy(agent.state_dict())
 
 
 best = {'model_bad_vs_random': 0,
@@ -317,7 +335,6 @@ def evaluate(save=False):
                           reward.std(), global_step)
         metric = reward.mean()
         if metric > best[name] and save:
-            save_model(step='best', name=name)
             best[name] = metric
 
 
@@ -351,6 +368,7 @@ if __name__ == "__main__":
         wandb.define_metric(
             f"test/reward_model_good_vs_random_mean", summary="max")
         wandb.define_metric(f"test/reward_model_vs_model_mean", summary="max")
+        wandb.define_metric("test/ELO", summary="max")
 
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
@@ -430,14 +448,14 @@ if __name__ == "__main__":
     num_updates = args.total_timesteps // args.batch_size
 
     evaluate()
-    weights_adversary_elo = agent.state_dict()
+    weights_adversary_elo = copy.deepcopy(agent.state_dict())
     for update in range(1, num_updates + 1):
 
         # Save old models after each  args.save_old_model_freq  up to args.num_old_models_to_save
         if update % args.save_old_model_freq == 0:
             if len(old_agents) == args.num_old_models_to_save:
                 old_agents.pop(0)
-            old_agents.append(agent.state_dict())
+            old_agents.append(copy.deepcopy(agent.state_dict()))
 
         # Set sampled enviroment
         if args.sample_batch_env:
@@ -621,6 +639,8 @@ if __name__ == "__main__":
         if update % args.freq_eval_test == 0:
             evaluate(save=True)
             evaluate_elo()
+        if update % args.freq_save_model == 0:
+            save_model('train')
     # End generation
 
     if num_updates % args.freq_eval_test > 0:
