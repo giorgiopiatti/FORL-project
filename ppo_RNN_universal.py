@@ -349,7 +349,7 @@ def evaluate(save=False):
     agent_cpu.load_state_dict(agent.state_dict())
     agent_cpu.eval()
     settings = [
-        {'name': 'model_bad_vs_random', 'agents': {'callee': random_model,  'good_1': random_model,
+        {'name': 'model_bad_vs_random', 'agents': {'callee': agent_cpu,  'good_1': random_model,
                                                    'good_2': random_model, 'good_3': random_model}, 'model': 'caller'},
         {'name': 'model_good_vs_random', 'agents': {'caller': random_model, 'callee': random_model,  'good_1': agent_cpu,
                                                     'good_2': agent_cpu, 'good_3': agent_cpu}, 'model': 'good_1'},
