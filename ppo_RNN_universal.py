@@ -181,13 +181,13 @@ class Agent(nn.Module):
         self.offset_round = env.current_round_shape[-1]
 
     def get_states(self, x, lstm_state, done):
-        x_features_round = x[:, :, :self.offset_round]
-        x_previous_round = x[:, :,  self.offset_round:]
+        x_features_round = x[:, :, :self.offset_round]    #B, S, F
+        x_previous_round = x[:, :,  self.offset_round:]    # B, S, P
 
         # LSTM logic
         batch_size = lstm_state[0].shape[1]
         x_previous_round = x_previous_round.reshape(
-            (-1, batch_size, self.lstm.input_size))
+            (-1, batch_size, self.lstm.input_size))      
         done = done.reshape((-1, batch_size))
 
         out_lstm = []
@@ -457,7 +457,7 @@ if __name__ == "__main__":
     old_agents = []
 
     def pick_random_agents():
-        role = np.random.choice(['caller', 'callee', 'good'], size=1)[0]
+        role = np.random.choice(['caller', 'callee', 'good'], size=1, p=[0.25, 0.25, 0.5])[0] #was uniform
 
         if role == 'good':
             role = np.random.choice(['good_1', 'good_2', 'good_3'], size=1)[0]
@@ -465,7 +465,7 @@ if __name__ == "__main__":
         def sample_model():
             if len(old_agents) > 0:
                 m = np.random.choice(
-                    ['old_agent', 'random', 'heuristic'], size=1, p=[0.6, 0.3, 0.1])[0]
+                    ['old_agent', 'random', 'heuristic'], size=1, p=[0.6, 0.1, 0.3])[0] #0.6 0.3 0.1
             else:
                 m = np.random.choice(
                     ['random', 'heuristic'], size=1, p=[0.5, 0.5])[0]
