@@ -84,6 +84,8 @@ def parse_args():
     parser.add_argument("--rnn-out-size", type=int, default=64)
     parser.add_argument("--sample-batch-env", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
     parser.add_argument("--hidden-dim", type=int, default=64)
+    parser.add_argument("--cuda-env", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
+        help="if toggled, cuda will be enabled by default")
 
     parser.add_argument('--logdir', type=str,
                         default='log/')
@@ -98,9 +100,6 @@ def parse_args():
 
     # fmt: on
     return args
-
-
-ENV_DEVICE = 'cpu'
 
 
 def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_eval=False):
@@ -181,13 +180,13 @@ class Agent(nn.Module):
         self.offset_round = env.current_round_shape[-1]
 
     def get_states(self, x, lstm_state, done):
-        x_features_round = x[:, :, :self.offset_round]    #B, S, F
+        x_features_round = x[:, :, :self.offset_round]  # B, S, F
         x_previous_round = x[:, :,  self.offset_round:]    # B, S, P
 
         # LSTM logic
         batch_size = lstm_state[0].shape[1]
         x_previous_round = x_previous_round.reshape(
-            (-1, batch_size, self.lstm.input_size))      
+            (-1, batch_size, self.lstm.input_size))
         done = done.reshape((-1, batch_size))
 
         out_lstm = []
@@ -450,6 +449,8 @@ if __name__ == "__main__":
 
     device = torch.device(
         "cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    ENV_DEVICE = torch.device(
+        "cuda" if torch.cuda.is_available() and args.cuda_env else "cpu")
 
     dummy_env = make_env(args.seed, 'caller', {})()
 
@@ -457,7 +458,8 @@ if __name__ == "__main__":
     old_agents = []
 
     def pick_random_agents():
-        role = np.random.choice(['caller', 'callee', 'good'], size=1, p=[0.25, 0.25, 0.5])[0] #was uniform
+        role = np.random.choice(['caller', 'callee', 'good'], size=1, p=[
+                                0.25, 0.25, 0.5])[0]  # was uniform
 
         if role == 'good':
             role = np.random.choice(['good_1', 'good_2', 'good_3'], size=1)[0]
@@ -465,7 +467,7 @@ if __name__ == "__main__":
         def sample_model():
             if len(old_agents) > 0:
                 m = np.random.choice(
-                    ['old_agent', 'random', 'heuristic'], size=1, p=[0.6, 0.1, 0.3])[0] #0.6 0.3 0.1
+                    ['old_agent', 'random', 'heuristic'], size=1, p=[0.6, 0.1, 0.3])[0]  # 0.6 0.3 0.1
             else:
                 m = np.random.choice(
                     ['random', 'heuristic'], size=1, p=[0.5, 0.5])[0]
