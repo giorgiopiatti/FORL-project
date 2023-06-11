@@ -444,5 +444,13 @@
             ],
             "justMyCode": false
         },
+        {
+            "name": "ELO",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ELO.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
     ]
 }
