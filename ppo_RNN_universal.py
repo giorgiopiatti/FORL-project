@@ -89,6 +89,9 @@ def parse_args():
 
     parser.add_argument('--logdir', type=str,
                         default='log/')
+
+    parser.add_argument('--resume-path', type=str, default=None)
+
     args = parser.parse_args()
 
     if args.briscola_communicate:
@@ -493,9 +496,23 @@ if __name__ == "__main__":
     agent = Agent(dummy_env).to(device)
     agent.eval()
 
+    optimizer = optim.Adam(
+        agent.parameters(), lr=args.learning_rate, eps=1e-5)
+
     id_log_model_training = 0
     global_step = 0
     start_time = time.time()
+    start_step = 0
+    start_update = 1
+
+    if args.resume_path is not None:
+        saved = torch.load(args.resume_path, map_location='cpu')
+        agent.load_state_dict(saved['model_state_dict'])
+        optimizer.load_state_dict(saved['optimizer_state_dict'])
+        global_step = saved['global_step']
+        start_step = global_step
+        start_update = (global_step // args.batch_size) + 1 # +1 because we want to start from the next update
+        print(f"Loaded model from {args.resume_path}")
 
     role_now_training, briscola_agents = pick_random_agents()
     # Seed is incremented at each generationspick_random_agents
@@ -504,14 +521,11 @@ if __name__ == "__main__":
             for i in range(args.num_envs)]
     )
 
-    optimizer = optim.Adam(
-        agent.parameters(), lr=args.learning_rate, eps=1e-5)
-
     num_updates = args.total_timesteps // args.batch_size
 
     evaluate()
     weights_adversary_elo = copy.deepcopy(agent.state_dict())
-    for update in range(1, num_updates + 1):
+    for update in range(start_update, num_updates + 1):
         # Save old models after each  args.save_old_model_freq  up to args.num_old_models_to_save
         if update % args.save_old_model_freq == 0:
             if len(old_agents) == args.num_old_models_to_save:
@@ -713,8 +727,8 @@ if __name__ == "__main__":
                           np.mean(clipfracs), global_step)
         writer.add_scalar(f"losses/explained_variance",
                           explained_var, global_step)
-        print("SPS:", int(global_step / (time.time() - start_time)))
-        writer.add_scalar("charts/SPS", int(global_step /
+        print("SPS:", int((global_step-start_step) / (time.time() - start_time)))
+        writer.add_scalar("charts/SPS", int((global_step - start_step) /
                                             (time.time() - start_time)), global_step)
 
         if update % args.freq_eval_test == 0:
