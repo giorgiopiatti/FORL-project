@@ -148,6 +148,10 @@ if __name__ == '__main__':
         pairs.append((i, 'heuristic'))
         pairs.append(('random', i))
         pairs.append(('heuristic', i))
+    pairs.append(('random', 'heuristic'))
+    pairs.append(('heuristic', 'random'))
+    pairs.append(('random', 'random'))
+    pairs.append(('heuristic', 'heuristic'))
 
     print(len(pairs))
     N = 128  # saved every N pairs 16 local
