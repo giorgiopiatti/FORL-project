@@ -452,5 +452,14 @@
             "console": "integratedTerminal",
             "justMyCode": false
         },
+        {
+            "name": "compute ELO",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ELO_tournament/compute_ELO.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/ELO_tournament"
+        },
     ]
 }
