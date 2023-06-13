@@ -1,2 +1,0 @@
-- need to adapt enviroment to support NN or RNN at the same time
-- need to adapt enviroment to support different hidden dimensions
