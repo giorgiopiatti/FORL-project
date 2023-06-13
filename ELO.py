@@ -17,28 +17,36 @@ import torch.optim as optim
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 from agents.elo_agents import AgentRNN, AgentNN
-from agents.heuristic_agent import HeuristicAgent
+
 from environment.briscola_communication.actions import BriscolaCommsAction
 
-from environment.briscola_base.briscola_ELO import BriscolaEnv
+
 
 
 SEED = 42
 NUM_TEST_GAMES = 1000
 DEVICE = 'cpu'
 
-# NOCOM
-BRISCOLA_COMMUNICATE = False
-NUM_STEPS = 8
-CURRENT_ROUND_SHAPE = (1, 159)
-NUM_ACTIONS = 40
-PREVIOUS_ROUND_SHAPE = (1, 86)
-OBSERVATION_SHAPE = 199
+
+def parse_args():
+    # fmt: off
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--briscola-communicate", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
+    parser.add_argument("--path-pool", type=str)
+    parser.add_argument("--file-pool", type=str)
+    parser.add_argument("--path-scores", type=str)
+    parser.add_argument("--num_workers", type=int, default=16)
+    args = parser.parse_args()
+    return args
 
 
 def make_env(arch, seed, role_training, briscola_agents):
     def thunk():
-        env = BriscolaEnv(arch, role=role_training,
+        if args.briscola_communicate:
+            env = BriscolaEnv(arch, role=role_training,
+                          agents=briscola_agents, device=DEVICE, communication_say_truth=True)
+        else:
+            env = BriscolaEnv(arch, role=role_training,
                           agents=briscola_agents, device=DEVICE)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.seed(seed)
@@ -99,13 +107,11 @@ def run_game(config, teamA='caller'):
     return rewardA, rewardB
 
 
-df = pd.read_csv('./ELO_tournament/nocom_models.csv')
-
 
 def get_model(name):
     if type(name) == int:
         entry = df.iloc[name]
-        path = f"./ELO_tournament/nocom/{entry['file_name']}"
+        path = f"{args.path_pool}/{entry['file_name']}"
         if entry['arch'] == 'rnn':
             model = AgentRNN(rnn_out_size=entry['rnn_out_size'], hidden_dim=entry['hidden_dim'], num_actions=NUM_ACTIONS,
                              current_round_shape=CURRENT_ROUND_SHAPE, previous_round_shape=PREVIOUS_ROUND_SHAPE)
@@ -140,6 +146,28 @@ def run(modelA, modelB):
 
 
 if __name__ == '__main__':
+    args = parse_args()
+    if args.briscola_communicate:
+        NUM_STEPS = 16
+        CURRENT_ROUND_SHAPE = (1, 184)
+        NUM_ACTIONS = 50
+        PREVIOUS_ROUND_SHAPE = (1, 111)
+        OBSERVATION_SHAPE = 224 
+        from agents.heuristic_agent_comm import HeuristicAgent
+        from environment.briscola_communication.briscola_ELO import BriscolaEnv
+    else:
+        # NOCOM
+        NUM_STEPS = 8
+        CURRENT_ROUND_SHAPE = (1, 159)
+        NUM_ACTIONS = 40
+        PREVIOUS_ROUND_SHAPE = (1, 86)
+        OBSERVATION_SHAPE = 199
+        from agents.heuristic_agent import HeuristicAgent
+        from environment.briscola_base.briscola_ELO import BriscolaEnv
+
+
+
+    df = pd.read_csv(args.file_pool)
     start = 0
     end = len(df)
     pairs = [(i, j) for i in range(start, end) for j in range(start, end)]
@@ -154,10 +182,9 @@ if __name__ == '__main__':
     pairs.append(('heuristic', 'heuristic'))
 
     print(len(pairs))
-    N = 128  # saved every N pairs 16 local
-    CSV_PATH_SCORES = './nocom_elo_scores.csv'
-
-    client = Client(n_workers=64, threads_per_worker=2)
+    N = args.num_workers
+    CSV_PATH_SCORES = args.path_scores
+    client = Client(n_workers=N//2, threads_per_worker=2)
 
     s = time.time()
     for i in range(0, len(pairs), N):
