@@ -71,7 +71,8 @@ class BriscolaCommsAction(BriscolaAction):
         elif self.message == Messages.BRISCOLINO:
             for c in player.current_hand:
                 is_valid = is_valid or (
-                    c.rank in ["2", "4", "5", "6", "7"] and c.suit == briscola_suit
+                    c.rank in ["2", "4", "5", "6",
+                               "7"] and c.suit == briscola_suit
                 )
         elif self.message == Messages.BRISCOLA_FIGURA:
             for c in player.current_hand:
@@ -86,7 +87,8 @@ class BriscolaCommsAction(BriscolaAction):
         elif self.message == Messages.LISCIO:
             for c in player.current_hand:
                 is_valid = is_valid or (
-                    c.rank in ["2", "4", "5", "6", "7"] and c.suit != briscola_suit
+                    c.rank in ["2", "4", "5", "6",
+                               "7"] and c.suit != briscola_suit
                 )
 
         if (is_valid and self.truth) or (not is_valid and not self.truth):
@@ -107,6 +109,9 @@ class BriscolaCommsAction(BriscolaAction):
 
     def __str__(self) -> str:
         return "Communicate_" + str(self.truth) + " " + str(self.message)
+
+    def get_name(self):
+        return f'{self.message}_{self.truth}'
 
     def __repr__(self) -> str:
         return self.__str__()

@@ -1,6 +1,7 @@
 """ Implement Briscola Game class
 """
 import functools
+import pandas as pd
 from heapq import merge
 import numpy as np
 from environment.briscola_communication.actions import BriscolaCommsAction, Messages
@@ -17,6 +18,59 @@ from environment.briscola_communication.round import BriscolaRound
 from environment.briscola_communication.judger import BriscolaJudger
 from environment.briscola_communication.card import Card
 from typing import List, Tuple
+
+
+class ComStats:
+
+    def __init__(self) -> None:
+        all_actions = [
+            BriscolaCommsAction(truth=t, message=m)
+            for m in Messages
+            for t in [True, False]
+        ]
+        self.actions_caller = {a.get_name(): 0 for a in all_actions}
+        self.actions_callee = {a.get_name(): 0 for a in all_actions}
+        self.actions_good = {a.get_name(): 0 for a in all_actions}
+        self.count_true_caller = 0
+        self.count_true_callee = 0
+        self.count_true_good = 0
+        self.num_truth = 0
+        self.keys = self.actions_callee.keys()
+
+    def get_vector(self, role):
+        denom = 8
+        if role == Roles.CALLER:
+            actions = self.actions_caller
+            truth = self.count_true_caller
+        elif role == Roles.CALLEE:
+            actions = self.actions_callee
+            truth = self.count_true_callee
+        elif role == Roles.GOOD_PLAYER:
+            actions = self.actions_good
+            truth = self.count_true_good
+            denom = 8*3
+
+        return pd.DataFrame({'truth_ratio': truth/denom, **{k: actions[k]/denom for k in self.keys}}, index=[0])
+
+    def update(self, player: BriscolaPlayer, action: BriscolaCommsAction):
+        if action.truth:
+            self.num_truth += 1
+        if player.role == Roles.CALLER and action.truth:
+            self.count_true_caller += 1
+        if player.role == Roles.CALLEE and action.truth:
+            self.count_true_callee += 1
+        if player.role == Roles.GOOD_PLAYER and action.truth:
+            self.count_true_good += 1
+
+        if player.role == Roles.CALLER:
+            self.actions_caller[action.get_name()] += 1
+        elif player.role == Roles.CALLEE:
+            self.actions_callee[action.get_name()] += 1
+        elif player.role == Roles.GOOD_PLAYER:
+            self.actions_good[action.get_name()] += 1
+
+    def get_truth(self):
+        return self.num_truth / (8*5)
 
 
 class BriscolaGame:
@@ -80,8 +134,10 @@ class BriscolaGame:
         if self.print_game:
             for i in range(5):
                 print(self.get_state(i))
-            print(f"Briscola: {self.briscola_suit} called_card: {self.called_card}")
+            print(
+                f"Briscola: {self.briscola_suit} called_card: {self.called_card}")
 
+        self.stats_comms = ComStats()
         return self.state, player_id
 
     def log(self, m):
@@ -139,7 +195,10 @@ class BriscolaGame:
     def step(self, action):
         if self.round.communication_phase:
             player = self.players[self.round.current_player]
-            self.log(f"Player {player.player_id} -> {action.message} saying {action.truth}")
+
+            self.stats_comms.update(player, action)
+            self.log(
+                f"Player {player.player_id} -> {action.message} saying {action.truth}")
 
             self.round.register_comm(player, action)
             self.round.update_current_player_comm()
@@ -206,7 +265,8 @@ class BriscolaGame:
             )
         else:
             available_actions = player.available_actions_card()
-            state = player.get_state(self.public, other_hands, available_actions)
+            state = player.get_state(
+                self.public, other_hands, available_actions)
 
         return state
 

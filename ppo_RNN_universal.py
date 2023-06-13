@@ -5,7 +5,7 @@ import random
 import time
 from distutils.util import strtobool
 import copy
-
+import pandas as pd
 import gymnasium as gym
 import numpy as np
 import torch
@@ -78,8 +78,7 @@ def parse_args():
     parser.add_argument("--num-old-models-to-save", type=int, default=2, help="")
 
     parser.add_argument("--briscola-communicate", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
-    parser.add_argument("--briscola-communicate-truth-only", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
-    parser.add_argument("--briscola-communicate-second-phase", type=int, default=8*5000000)
+    parser.add_argument("--briscola-communicate-truth", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
 
     parser.add_argument("--rnn-out-size", type=int, default=64)
     parser.add_argument("--sample-batch-env", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
@@ -110,7 +109,7 @@ def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_
         if args.briscola_communicate:
             env = BriscolaEnv(1, args.rnn_out_size, normalize_reward=False, render_mode='terminal_env' if verbose else None,
                               role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE,
-                              communication_say_truth=briscola_communicate_truth)
+                              communication_say_truth=args.briscola_communicate_truth)
         else:
             env = BriscolaEnv(1, args.rnn_out_size, normalize_reward=False, render_mode='terminal_env' if verbose else None,
                               role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE)
@@ -290,9 +289,6 @@ def evaluate_elo():
             data['action_mask'], dtype=torch.bool, device=device), torch.tensor(done, dtype=torch.float, device=device)
 
     reward_bad = reward.mean()
-    if args.briscola_communicate:
-        writer.add_scalar(f"test/truth_ratio_ELO_caller",
-                          count_truth_comm/(8.0*args.num_test_games), global_step)
 
     # 2 Game
     config = {'callee': adversary_agent,  'caller': adversary_agent,
@@ -328,9 +324,6 @@ def evaluate_elo():
         next_obs, next_mask, next_done = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device), torch.tensor(done, dtype=torch.float, device=device)
     reward_good = reward.mean()
-    if args.briscola_communicate:
-        writer.add_scalar(f"test/truth_ratio_ELO_good",
-                          count_truth_comm/(8.0*args.num_test_games), global_step)
 
     expected_score = 60
     mean_reward = (reward_bad+reward_good)/2
@@ -343,6 +336,17 @@ def evaluate_elo():
 
 best = {'model_bad_vs_random': 0,
         'model_good_vs_random': 0, 'model_vs_model': 0}
+
+
+def log_coms(info, name, roles):
+    for r in roles:
+        m = pd.concat([a[f'stats_comms_{r}'] for a in info]).mean()
+        for (colname, colval) in m.items():
+            writer.add_scalar(
+                f"test/{name}/{r}/{colname}", colval, global_step)
+
+    m = np.array([a[f'stats_truth'] for a in info]).mean()
+    writer.add_scalar(f"test/{name}/truth_ratio", m, global_step)
 
 
 def evaluate(save=False):
@@ -393,8 +397,13 @@ def evaluate(save=False):
         metric = None
 
         if args.briscola_communicate:
-            writer.add_scalar(f"test/truth_ratio_{name}_{s['model']}",
-                              count_truth_comm/(8.0*args.num_test_games), global_step)
+            if name == 'model_bad_vs_random':
+                log_coms(info['final_info'], name, ['callee', 'caller'])
+            elif name == 'model_good_vs_random':
+                log_coms(info['final_info'], name, ['good'])
+            elif name == 'model_vs_model':
+                log_coms(info['final_info'], name, [
+                         'callee', 'caller', 'good'])
 
         writer.add_scalar(f"test/reward_{name}_mean",
                           reward.mean(), global_step)
@@ -413,7 +422,6 @@ if __name__ == "__main__":
 
     if args.briscola_communicate:
         from environment.briscola_communication.briscola_rnn import BriscolaEnv
-        briscola_communicate_truth = True  # Start with true
     else:
         from environment.briscola_base.briscola_rnn import BriscolaEnv
 
@@ -511,7 +519,8 @@ if __name__ == "__main__":
         optimizer.load_state_dict(saved['optimizer_state_dict'])
         global_step = saved['global_step']
         start_step = global_step
-        start_update = (global_step // args.batch_size) + 1 # +1 because we want to start from the next update
+        # +1 because we want to start from the next update
+        start_update = (global_step // args.batch_size) + 1
         print(f"Loaded model from {args.resume_path}")
 
     role_now_training, briscola_agents = pick_random_agents()

@@ -76,13 +76,13 @@ def parse_args():
     parser.add_argument("--num-old-models-to-save", type=int, default=2, help="")
 
     parser.add_argument("--briscola-communicate", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
-    parser.add_argument("--briscola-communicate-truth-only", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True)
-    parser.add_argument("--briscola-communicate-second-phase", type=int, default=8*5000000)
+    parser.add_argument("--briscola-communicate-truth", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
 
     parser.add_argument("--sample-batch-env", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument('--logdir', type=str,
                         default='log/')
+    parser.add_argument('--resume-path', type=str, default=None)
     args = parser.parse_args()
 
     if args.briscola_communicate:
@@ -104,7 +104,7 @@ def make_env(seed, role_training, briscola_agents, verbose=False, deterministic_
         if args.briscola_communicate:
             env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
                               role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE,
-                              communication_say_truth=briscola_communicate_truth)
+                              communication_say_truth=args.briscola_communicate_truth)
         else:
             env = BriscolaEnv(normalize_reward=False, render_mode='terminal_env' if verbose else None,
                               role=role_training,  agents=briscola_agents, deterministic_eval=deterministic_eval, device=ENV_DEVICE)
@@ -237,9 +237,6 @@ def evaluate_elo():
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
     reward_bad = reward.mean()
-    if args.briscola_communicate:
-        writer.add_scalar(f"test/truth_ratio_ELO_caller",
-                          count_truth_comm/(8.0*args.num_test_games), global_step)
 
     # 2 Game
     config = {'callee': adversary_agent,  'caller': adversary_agent,
@@ -268,9 +265,6 @@ def evaluate_elo():
         next_obs, next_mask = torch.tensor(data['observation'], device=device,  dtype=torch.float), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=device)
     reward_good = reward.mean()
-    if args.briscola_communicate:
-        writer.add_scalar(f"test/truth_ratio_ELO_good",
-                          count_truth_comm/(8.0*args.num_test_games), global_step)
 
     expected_score = 60
     mean_reward = (reward_bad+reward_good)/2
@@ -284,6 +278,15 @@ def evaluate_elo():
 best = {'model_bad_vs_random': 0,
         'model_good_vs_random': 0, 'model_vs_model': 0}
 
+def log_coms(info, name, roles):
+    for r in roles:
+        m = pd.concat([a[f'stats_comms_{r}'] for a in info]).mean()
+        for (colname, colval) in m.items():
+            writer.add_scalar(
+                f"test/{name}/{r}/{colname}", colval, global_step)
+
+    m = np.array([a[f'stats_truth'] for a in info]).mean()
+    writer.add_scalar(f"test/{name}/truth_ratio", m, global_step)
 
 def evaluate(save=False):
     random_model = 'random'
@@ -326,8 +329,13 @@ def evaluate(save=False):
         metric = None
 
         if args.briscola_communicate:
-            writer.add_scalar(f"test/truth_ratio_{name}_{s['model']}",
-                              count_truth_comm/(8.0*args.num_test_games), global_step)
+            if name == 'model_bad_vs_random':
+                log_coms(info['final_info'], name, ['callee', 'caller'])
+            elif name == 'model_good_vs_random':
+                log_coms(info['final_info'], name, ['good'])
+            elif name == 'model_vs_model':
+                log_coms(info['final_info'], name, [
+                         'callee', 'caller', 'good'])
 
         writer.add_scalar(f"test/reward_{name}_mean",
                           reward.mean(), global_step)
@@ -432,9 +440,25 @@ if __name__ == "__main__":
     agent = Agent(dummy_envs).to(device)
     agent.eval()
 
+    optimizer = optim.Adam(
+        agent.parameters(), lr=args.learning_rate, eps=1e-5)
+
     id_log_model_training = 0
     global_step = 0
     start_time = time.time()
+    start_step = 0
+    start_update = 1
+
+    if args.resume_path is not None:
+        saved = torch.load(args.resume_path, map_location='cpu')
+        agent.load_state_dict(saved['model_state_dict'])
+        optimizer.load_state_dict(saved['optimizer_state_dict'])
+        global_step = saved['global_step']
+        start_step = global_step
+        # +1 because we want to start from the next update
+        start_update = (global_step // args.batch_size) + 1
+        print(f"Loaded model from {args.resume_path}")
+
 
     role_now_training, briscola_agents = pick_random_agents()
     # Seed is incremented at each generationspick_random_agents
@@ -443,14 +467,11 @@ if __name__ == "__main__":
             for i in range(args.num_envs)]
     )
 
-    optimizer = optim.Adam(
-        agent.parameters(), lr=args.learning_rate, eps=1e-5)
-
     num_updates = args.total_timesteps // args.batch_size
 
     evaluate()
     weights_adversary_elo = copy.deepcopy(agent.state_dict())
-    for update in range(1, num_updates + 1):
+    for update in range(start_update, num_updates + 1):
 
         # Save old models after each  args.save_old_model_freq  up to args.num_old_models_to_save
         if update % args.save_old_model_freq == 0:
@@ -633,8 +654,8 @@ if __name__ == "__main__":
                           np.mean(clipfracs), global_step)
         writer.add_scalar(f"losses/explained_variance",
                           explained_var, global_step)
-        print("SPS:", int(global_step / (time.time() - start_time)))
-        writer.add_scalar("charts/SPS", int(global_step /
+        print("SPS:", int((global_step-start_step) / (time.time() - start_time)))
+        writer.add_scalar("charts/SPS", int((global_step - start_step) /
                                             (time.time() - start_time)), global_step)
 
         if update % args.freq_eval_test == 0:
