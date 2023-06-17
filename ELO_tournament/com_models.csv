@@ -1,0 +1,121 @@
+,name,id,arch,comm,hidden_dim,rnn_out_size,step,last,file_name
+0,COMM 2nd phase RNN h=32 m=64 P2,1h08z60w,rnn,com,32,64,192000000,True,1h08z60w_192000000.pt
+0,COMM 2nd phase RNN h=32 m=128 P2,29zodlwv,rnn,com,32,128,192000000,True,29zodlwv_192000000.pt
+0,COMM 2nd phase RNN h=64 m=64 P2,26ubqku0,rnn,com,64,64,192000000,True,26ubqku0_192000000.pt
+0,COMM 2nd phase RNN h=128 m=64 P2,pzngw12y,rnn,com,128,64,192000000,True,pzngw12y_192000000.pt
+0,COMM 2nd phase RNN h=64 m=128 P2,2muooenl,rnn,com,64,128,192000000,True,2muooenl_192000000.pt
+0,COMM 2nd phase NN h=64 sample_batch=True P2,3i6gqzkr,nn,com,64,0,192000000,True,3i6gqzkr_192000000.pt
+0,COMM 2nd phase NN h=32 sample_batch=True P2,2j0s9y8n,nn,com,32,0,192000000,True,2j0s9y8n_192000000.pt
+0,COMM 2nd phase NN h=32 sample_batch=False P2,ybiqspb6,nn,com,32,0,192000000,True,ybiqspb6_192000000.pt
+0,COMM 2nd phase NN h=64 sample_batch=False P2,2ey4snil,nn,com,64,0,192000000,True,2ey4snil_192000000.pt
+0,COMM RNN h=128 m=128 P2,2l9t455d,rnn,com,128,128,102400256,False,2l9t455d_102400256.pt
+0,COMM RNN h=128 m=128 P2,2l9t455d,rnn,com,128,128,128000256,False,2l9t455d_128000256.pt
+0,COMM NN h=64 sample_batch=False P2,1mfxc6le,nn,com,64,0,25600000,False,1mfxc6le_25600000.pt
+0,COMM NN h=64 sample_batch=False P2,1mfxc6le,nn,com,64,0,51200000,False,1mfxc6le_51200000.pt
+0,COMM NN h=64 sample_batch=False P2,1mfxc6le,nn,com,64,0,76800000,False,1mfxc6le_76800000.pt
+0,COMM NN h=64 sample_batch=False P2,1mfxc6le,nn,com,64,0,102400000,False,1mfxc6le_102400000.pt
+0,COMM NN h=64 sample_batch=False P2,1mfxc6le,nn,com,64,0,128000000,False,1mfxc6le_128000000.pt
+0,COMM NN h=64 sample_batch=False P2,1mfxc6le,nn,com,64,0,153600000,False,1mfxc6le_153600000.pt
+0,COMM NN h=64 sample_batch=False P2,1mfxc6le,nn,com,64,0,160000000,True,1mfxc6le_160000000.pt
+0,COMM NN h=32 sample_batch=False P2,2butggxi,nn,com,32,0,25600000,False,2butggxi_25600000.pt
+0,COMM NN h=32 sample_batch=False P2,2butggxi,nn,com,32,0,51200000,False,2butggxi_51200000.pt
+0,COMM NN h=32 sample_batch=False P2,2butggxi,nn,com,32,0,76800000,False,2butggxi_76800000.pt
+0,COMM NN h=32 sample_batch=False P2,2butggxi,nn,com,32,0,102400000,False,2butggxi_102400000.pt
+0,COMM NN h=32 sample_batch=False P2,2butggxi,nn,com,32,0,128000000,False,2butggxi_128000000.pt
+0,COMM NN h=32 sample_batch=False P2,2butggxi,nn,com,32,0,153600000,False,2butggxi_153600000.pt
+0,COMM NN h=32 sample_batch=False P2,2butggxi,nn,com,32,0,160000000,True,2butggxi_160000000.pt
+0,COMM NN h=32 sample_batch=True P2,2he5v1mm,nn,com,32,0,25600000,False,2he5v1mm_25600000.pt
+0,COMM NN h=32 sample_batch=True P2,2he5v1mm,nn,com,32,0,51200000,False,2he5v1mm_51200000.pt
+0,COMM NN h=32 sample_batch=True P2,2he5v1mm,nn,com,32,0,76800000,False,2he5v1mm_76800000.pt
+0,COMM NN h=32 sample_batch=True P2,2he5v1mm,nn,com,32,0,102400000,False,2he5v1mm_102400000.pt
+0,COMM NN h=32 sample_batch=True P2,2he5v1mm,nn,com,32,0,128000000,False,2he5v1mm_128000000.pt
+0,COMM NN h=32 sample_batch=True P2,2he5v1mm,nn,com,32,0,153600000,False,2he5v1mm_153600000.pt
+0,COMM NN h=32 sample_batch=True P2,2he5v1mm,nn,com,32,0,160000000,True,2he5v1mm_160000000.pt
+0,COMM NN h=64 sample_batch=True P2,cziybs7v,nn,com,64,0,25600000,False,cziybs7v_25600000.pt
+0,COMM NN h=64 sample_batch=True P2,cziybs7v,nn,com,64,0,51200000,False,cziybs7v_51200000.pt
+0,COMM NN h=64 sample_batch=True P2,cziybs7v,nn,com,64,0,76800000,False,cziybs7v_76800000.pt
+0,COMM NN h=64 sample_batch=True P2,cziybs7v,nn,com,64,0,102400000,False,cziybs7v_102400000.pt
+0,COMM NN h=64 sample_batch=True P2,cziybs7v,nn,com,64,0,128000000,False,cziybs7v_128000000.pt
+0,COMM NN h=64 sample_batch=True P2,cziybs7v,nn,com,64,0,153600000,False,cziybs7v_153600000.pt
+0,COMM NN h=64 sample_batch=True P2,cziybs7v,nn,com,64,0,160000000,True,cziybs7v_160000000.pt
+0,COMM RNN h=128 m=128 P2,amd6d9kr,rnn,com,128,128,25600000,False,amd6d9kr_25600000.pt
+0,COMM RNN h=128 m=128 P2,amd6d9kr,rnn,com,128,128,51200000,False,amd6d9kr_51200000.pt
+0,COMM RNN h=128 m=128 P2,amd6d9kr,rnn,com,128,128,76800000,False,amd6d9kr_76800000.pt
+0,COMM RNN h=128 m=64 P2,wzvf77xg,rnn,com,128,64,25600000,False,wzvf77xg_25600000.pt
+0,COMM RNN h=128 m=64 P2,wzvf77xg,rnn,com,128,64,51200000,False,wzvf77xg_51200000.pt
+0,COMM RNN h=128 m=64 P2,wzvf77xg,rnn,com,128,64,76800000,False,wzvf77xg_76800000.pt
+0,COMM RNN h=128 m=64 P2,wzvf77xg,rnn,com,128,64,102400000,False,wzvf77xg_102400000.pt
+0,COMM RNN h=128 m=64 P2,wzvf77xg,rnn,com,128,64,128000000,False,wzvf77xg_128000000.pt
+0,COMM RNN h=128 m=64 P2,wzvf77xg,rnn,com,128,64,153600000,False,wzvf77xg_153600000.pt
+0,COMM RNN h=128 m=64 P2,wzvf77xg,rnn,com,128,64,160000000,True,wzvf77xg_160000000.pt
+0,COMM RNN h=64 m=128 P2,euihftzr,rnn,com,64,128,25600000,False,euihftzr_25600000.pt
+0,COMM RNN h=64 m=128 P2,euihftzr,rnn,com,64,128,51200000,False,euihftzr_51200000.pt
+0,COMM RNN h=64 m=128 P2,euihftzr,rnn,com,64,128,76800000,False,euihftzr_76800000.pt
+0,COMM RNN h=64 m=128 P2,euihftzr,rnn,com,64,128,102400000,False,euihftzr_102400000.pt
+0,COMM RNN h=64 m=128 P2,euihftzr,rnn,com,64,128,128000000,False,euihftzr_128000000.pt
+0,COMM RNN h=64 m=128 P2,euihftzr,rnn,com,64,128,153600000,False,euihftzr_153600000.pt
+0,COMM RNN h=64 m=128 P2,euihftzr,rnn,com,64,128,160000000,True,euihftzr_160000000.pt
+0,COMM RNN h=64 m=64 P2,dicdr57l,rnn,com,64,64,25600000,False,dicdr57l_25600000.pt
+0,COMM RNN h=64 m=64 P2,dicdr57l,rnn,com,64,64,51200000,False,dicdr57l_51200000.pt
+0,COMM RNN h=64 m=64 P2,dicdr57l,rnn,com,64,64,76800000,False,dicdr57l_76800000.pt
+0,COMM RNN h=64 m=64 P2,dicdr57l,rnn,com,64,64,102400000,False,dicdr57l_102400000.pt
+0,COMM RNN h=64 m=64 P2,dicdr57l,rnn,com,64,64,128000000,False,dicdr57l_128000000.pt
+0,COMM RNN h=64 m=64 P2,dicdr57l,rnn,com,64,64,153600000,False,dicdr57l_153600000.pt
+0,COMM RNN h=64 m=64 P2,dicdr57l,rnn,com,64,64,160000000,True,dicdr57l_160000000.pt
+0,COMM RNN h=32 m=128 P2,92aoa9l2,rnn,com,32,128,25600000,False,92aoa9l2_25600000.pt
+0,COMM RNN h=32 m=128 P2,92aoa9l2,rnn,com,32,128,51200000,False,92aoa9l2_51200000.pt
+0,COMM RNN h=32 m=128 P2,92aoa9l2,rnn,com,32,128,76800000,False,92aoa9l2_76800000.pt
+0,COMM RNN h=32 m=128 P2,92aoa9l2,rnn,com,32,128,102400000,False,92aoa9l2_102400000.pt
+0,COMM RNN h=32 m=128 P2,92aoa9l2,rnn,com,32,128,128000000,False,92aoa9l2_128000000.pt
+0,COMM RNN h=32 m=128 P2,92aoa9l2,rnn,com,32,128,153600000,False,92aoa9l2_153600000.pt
+0,COMM RNN h=32 m=128 P2,92aoa9l2,rnn,com,32,128,160000000,True,92aoa9l2_160000000.pt
+0,COMM RNN h=32 m=64 P2,j7h7xjb5,rnn,com,32,64,25600000,False,j7h7xjb5_25600000.pt
+0,COMM RNN h=32 m=64 P2,j7h7xjb5,rnn,com,32,64,51200000,False,j7h7xjb5_51200000.pt
+0,COMM RNN h=32 m=64 P2,j7h7xjb5,rnn,com,32,64,76800000,False,j7h7xjb5_76800000.pt
+0,COMM RNN h=32 m=64 P2,j7h7xjb5,rnn,com,32,64,102400000,False,j7h7xjb5_102400000.pt
+0,COMM RNN h=32 m=64 P2,j7h7xjb5,rnn,com,32,64,128000000,False,j7h7xjb5_128000000.pt
+0,COMM RNN h=32 m=64 P2,j7h7xjb5,rnn,com,32,64,153600000,False,j7h7xjb5_153600000.pt
+0,COMM RNN h=32 m=64 P2,j7h7xjb5,rnn,com,32,64,160000000,True,j7h7xjb5_160000000.pt
+0,COMM RNN h=128 m=64 P1,awo86wvg,rnn,com,128,64,25600000,False,awo86wvg_25600000.pt
+0,COMM RNN h=128 m=64 P1,awo86wvg,rnn,com,128,64,51200000,False,awo86wvg_51200000.pt
+0,COMM RNN h=128 m=64 P1,awo86wvg,rnn,com,128,64,76800000,False,awo86wvg_76800000.pt
+0,COMM RNN h=128 m=64 P1,awo86wvg,rnn,com,128,64,102400000,False,awo86wvg_102400000.pt
+0,COMM RNN h=128 m=64 P1,awo86wvg,rnn,com,128,64,128000000,False,awo86wvg_128000000.pt
+0,COMM RNN h=128 m=64 P1,awo86wvg,rnn,com,128,64,153600000,False,awo86wvg_153600000.pt
+0,COMM RNN h=128 m=64 P1,awo86wvg,rnn,com,128,64,160000000,True,awo86wvg_160000000.pt
+0,COMM RNN h=64 m=128 P1,du6yhodr,rnn,com,64,128,25600000,False,du6yhodr_25600000.pt
+0,COMM RNN h=64 m=128 P1,du6yhodr,rnn,com,64,128,51200000,False,du6yhodr_51200000.pt
+0,COMM RNN h=64 m=128 P1,du6yhodr,rnn,com,64,128,76800000,False,du6yhodr_76800000.pt
+0,COMM RNN h=64 m=128 P1,du6yhodr,rnn,com,64,128,102400000,False,du6yhodr_102400000.pt
+0,COMM RNN h=64 m=128 P1,du6yhodr,rnn,com,64,128,128000000,False,du6yhodr_128000000.pt
+0,COMM RNN h=64 m=128 P1,du6yhodr,rnn,com,64,128,153600000,False,du6yhodr_153600000.pt
+0,COMM RNN h=64 m=128 P1,du6yhodr,rnn,com,64,128,160000000,True,du6yhodr_160000000.pt
+0,COMM RNN h=64 m=64 P1,t8rxwrk9,rnn,com,64,64,25600000,False,t8rxwrk9_25600000.pt
+0,COMM RNN h=64 m=64 P1,t8rxwrk9,rnn,com,64,64,51200000,False,t8rxwrk9_51200000.pt
+0,COMM RNN h=64 m=64 P1,t8rxwrk9,rnn,com,64,64,76800000,False,t8rxwrk9_76800000.pt
+0,COMM RNN h=64 m=64 P1,t8rxwrk9,rnn,com,64,64,102400000,False,t8rxwrk9_102400000.pt
+0,COMM RNN h=64 m=64 P1,t8rxwrk9,rnn,com,64,64,128000000,False,t8rxwrk9_128000000.pt
+0,COMM RNN h=64 m=64 P1,t8rxwrk9,rnn,com,64,64,153600000,False,t8rxwrk9_153600000.pt
+0,COMM RNN h=64 m=64 P1,t8rxwrk9,rnn,com,64,64,160000000,True,t8rxwrk9_160000000.pt
+0,COMM RNN h=32 m=128 P1,xua5085f,rnn,com,32,128,25600000,False,xua5085f_25600000.pt
+0,COMM RNN h=32 m=128 P1,xua5085f,rnn,com,32,128,51200000,False,xua5085f_51200000.pt
+0,COMM RNN h=32 m=128 P1,xua5085f,rnn,com,32,128,76800000,False,xua5085f_76800000.pt
+0,COMM RNN h=32 m=128 P1,xua5085f,rnn,com,32,128,102400000,False,xua5085f_102400000.pt
+0,COMM RNN h=32 m=128 P1,xua5085f,rnn,com,32,128,128000000,False,xua5085f_128000000.pt
+0,COMM RNN h=32 m=128 P1,xua5085f,rnn,com,32,128,153600000,False,xua5085f_153600000.pt
+0,COMM RNN h=32 m=128 P1,xua5085f,rnn,com,32,128,160000000,True,xua5085f_160000000.pt
+0,COMM RNN h=32 m=64 P1,t7v3ipkz,rnn,com,32,64,25600000,False,t7v3ipkz_25600000.pt
+0,COMM RNN h=32 m=64 P1,t7v3ipkz,rnn,com,32,64,51200000,False,t7v3ipkz_51200000.pt
+0,COMM RNN h=32 m=64 P1,t7v3ipkz,rnn,com,32,64,76800000,False,t7v3ipkz_76800000.pt
+0,COMM RNN h=32 m=64 P1,t7v3ipkz,rnn,com,32,64,102400000,False,t7v3ipkz_102400000.pt
+0,COMM RNN h=32 m=64 P1,t7v3ipkz,rnn,com,32,64,128000000,False,t7v3ipkz_128000000.pt
+0,COMM RNN h=32 m=64 P1,t7v3ipkz,rnn,com,32,64,153600000,False,t7v3ipkz_153600000.pt
+0,COMM RNN h=32 m=64 P1,t7v3ipkz,rnn,com,32,64,160000000,True,t7v3ipkz_160000000.pt
+0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,25600000,False,b30qgkog_25600000.pt
+0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,51200000,False,b30qgkog_51200000.pt
+0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,76800000,False,b30qgkog_76800000.pt
+0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,102400000,False,b30qgkog_102400000.pt
+0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,128000000,False,b30qgkog_128000000.pt
+0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,153600000,False,b30qgkog_153600000.pt
+0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,160000000,True,b30qgkog_160000000.pt
+0,COMM 2nd phase RNN h=128 m=128 P2,2oxy90q1,rnn,com,128,128,143360000,False,2oxy90q1_143360000.pth

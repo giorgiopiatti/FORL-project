@@ -461,5 +461,25 @@
             "justMyCode": false,
             "cwd": "${workspaceFolder}/ELO_tournament"
         },
+        {
+            "name": "compute ELO COM",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ELO.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--briscola-communicate",
+                "--path-pool",
+                "./ELO_tournament/com",
+                "--file-pool",
+                "./ELO_tournament/com_models.csv",
+                "--path-scores",
+                "./ELO_tournament/com_scores.csv",
+                "--num-workers",
+                "16"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
     ]
 }

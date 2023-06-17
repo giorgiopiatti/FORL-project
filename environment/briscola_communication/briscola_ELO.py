@@ -267,6 +267,7 @@ class BriscolaEnv(gym.Env):
         next_state, next_player_id = self.game.step(action)
         # Play until is my turn
         next_state = self._play_until_is_me(next_state, next_player_id)
+        info = {'raw_state': next_state}
         terminated = False
         reward = np.array([0.0])
         if self.game.is_over():
@@ -275,8 +276,16 @@ class BriscolaEnv(gym.Env):
                 self.game.caller_id, self.game.callee_id
             )
             reward = reward[self._player_id]
+            info['stats_comms_caller'] = self.game.stats_comms.get_vector(
+                Roles.CALLER)
+            info['stats_comms_callee'] = self.game.stats_comms.get_vector(
+                Roles.CALLEE)
+            info['stats_comms_good'] = self.game.stats_comms.get_vector(
+                Roles.GOOD_PLAYER)
+            info['stats_truth'] = self.game.stats_comms.get_truth()
+            
         observation = self._get_obs(self._player_id)
-        return observation, reward, terminated, False, {'raw_state': next_state}
+        return observation, reward, terminated, False, info
 
     def _decode_action(self, action_id) -> BriscolaAction:
         ''' Action id -> the action in the game. Must be implemented in the child class.

@@ -105,9 +105,16 @@ def run_game(config, teamA='caller'):
         next_obs, next_mask = torch.tensor(data['observation'],  dtype=torch.float, device=DEVICE), torch.tensor(
             data['action_mask'], dtype=torch.bool, device=DEVICE),
 
+    stats = None
+    if args.briscola_communicate:
+        s1 = pd.concat([a[f'stats_comms_caller'] for a in info['final_info']]).mean().add_prefix('caller/')
+        s2 = pd.concat([a[f'stats_comms_callee'] for a in info['final_info']]).mean().add_prefix('callee/')
+        s3 = pd.concat([a[f'stats_comms_good'] for a in info['final_info']]).mean().add_prefix('good/')
+        stats = pd.concat([s1, s2, s3]).to_frame().transpose()
+
     rewardA = reward.mean()
     rewardB = 120.0-rewardA
-    return rewardA, rewardB
+    return rewardA, rewardB, stats
 
 
 
@@ -136,7 +143,7 @@ def run(modelA, modelB):
     b = get_model(modelB)
     config = {'caller': a, 'callee': a,
               'good_1': b, 'good_2': b, 'good_3': b}
-    rewardA, rewardB = run_game(config, teamA='caller')
+    rewardA, rewardB, stats = run_game(config, teamA='caller')
 
     aName = modelA if type(modelA) == str else f"{df.iloc[modelA]['name']}"
     bName = modelB if type(modelB) == str else f"{df.iloc[modelB]['name']}"
@@ -145,6 +152,10 @@ def run(modelA, modelB):
 
     res = pd.DataFrame({'model_bad_id':  modelA, 'model_good_id': modelB,  'model_bad_name': aName, 'model_bad_step': aStep,
                        'model_good_name': bName, 'model_good_step': bStep, 'reward_bad': rewardA, 'reward_good': rewardB}, index=[0])
+
+    if args.briscola_communicate:
+        res = pd.concat([res, stats], axis=1)
+
     return res
 
 
@@ -174,7 +185,7 @@ if __name__ == '__main__':
     start = 0
     end = len(df)
     pairs = [(i, j) for i in range(start, end) for j in range(start, end)]
-    for i in range(len(df)):
+    for i in range(end):
         pairs.append((i, 'random'))
         pairs.append((i, 'heuristic'))
         pairs.append(('random', i))
