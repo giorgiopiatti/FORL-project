@@ -35,7 +35,10 @@ def parse_args():
     parser.add_argument("--path-pool", type=str)
     parser.add_argument("--file-pool", type=str)
     parser.add_argument("--path-scores", type=str)
-    parser.add_argument("--num_workers", type=int, default=16)
+    parser.add_argument("--num-workers", type=int, default=16)
+    parser.add_argument("--briscola-communicate-truth", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True)
+
+
     args = parser.parse_args()
     return args
 
@@ -44,7 +47,7 @@ def make_env(arch, seed, role_training, briscola_agents):
     def thunk():
         if args.briscola_communicate:
             env = BriscolaEnv(arch, role=role_training,
-                          agents=briscola_agents, device=DEVICE, communication_say_truth=True)
+                          agents=briscola_agents, device=DEVICE, communication_say_truth=args.briscola_communicate_truth)
         else:
             env = BriscolaEnv(arch, role=role_training,
                           agents=briscola_agents, device=DEVICE)
