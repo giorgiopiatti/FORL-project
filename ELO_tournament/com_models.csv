@@ -118,4 +118,4 @@
 0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,128000000,False,b30qgkog_128000000.pt
 0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,153600000,False,b30qgkog_153600000.pt
 0,COMM RNN h=128 m=128 P1,b30qgkog,rnn,com,128,128,160000000,True,b30qgkog_160000000.pt
-0,COMM 2nd phase RNN h=128 m=128 P2,2oxy90q1,rnn,com,128,128,143360000,False,2oxy90q1_143360000.pth
+0,COMM 2nd phase RNN h=128 m=128 P2,2oxy90q1,rnn,com,128,128,143360000,False,2oxy90q1_143360000.pt
