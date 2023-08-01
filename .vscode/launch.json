@@ -203,6 +203,283 @@
             "program": "${workspaceFolder}/baselines.py",
             "console": "integratedTerminal",
             "justMyCode": false
-        }
+        },
+        {
+            "name": "ppo",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-train-mode",
+                "bad_multiple_networks",
+                "--total-timesteps",
+                "80000",
+                "--briscola-env-immediate-reward"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo bad_single_network",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--freq-eval-test",
+                "100",
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--total-timesteps",
+                "800"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo bug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--freq-eval-test",
+                "100",
+                "--total-timesteps",
+                "800",
+                "--briscola-roles-train",
+                "caller",
+                "--briscola-callee-heuristic",
+                "--briscola-env-immediate-reward"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "dqn",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/dqn.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "ppo bad_single_network comms",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--freq-eval-test",
+                "100",
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--total-timesteps",
+                "8000",
+                "--briscola-communicate",
+                "--num-generations",
+                "4",
+                "--num-test-games",
+                "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo bad_single_network comms bug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--briscola-communicate",
+                "--num-test-games",
+                "1"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "bug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--briscola-communicate",
+                "--num-test-games",
+                "100"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo DEBUG euler",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-train-mode",
+                "bad_single_network",
+                "--num-generations",
+                "5",
+                "--total-timesteps",
+                "8000000",
+                "--track",
+                "--exp-name",
+                "PPO_bad_single_points"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "com traces",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/briscola_trace.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-train-mode",
+                "bad_multiple_networks",
+                "--num-generations",
+                "5",
+                "--total-timesteps",
+                "16000000",
+                "--track",
+                "--exp-name",
+                "PPO_bad_multiple_COMS_truth_D",
+                // "--briscola-communicate",
+                // "--briscola-communicate-truth-only",
+                "--cuda",
+                "False"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo_com_universal_bad",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com_universal_bad.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--briscola-communicate",
+                "--num-test-games",
+                "1",
+                "--total-timesteps",
+                "8000"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo_universal",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--num-test-games",
+                "10",
+                "--save-old-model-freq",
+                "5",
+                "--total-timesteps",
+                "800000",
+                "--track"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "lstm atari",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_atari_lstm_example.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "ppo_universal RNN",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_RNN_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--total-timesteps",
+                "800000",
+                "--num-test-games",
+                "10",
+                "--freq-eval-test",
+                "100",
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo_universal RNN COM",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_RNN_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--total-timesteps",
+                "800000",
+                "--num-test-games",
+                "10",
+                "--freq-eval-test",
+                "100",
+                "--briscola-communicate"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ppo_universal COM",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ppo_com_universal.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--save-old-model-freq",
+                "5",
+                "--total-timesteps",
+                "800000",
+                "--num-test-games",
+                "10",
+                "--briscola-communicate",
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "ELO",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ELO.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "compute ELO",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ELO_tournament/compute_ELO.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/ELO_tournament"
+        },
+        {
+            "name": "compute ELO COM",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/ELO.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--briscola-communicate",
+                "--path-pool",
+                "./ELO_tournament/com",
+                "--file-pool",
+                "./ELO_tournament/com_models.csv",
+                "--path-scores",
+                "./ELO_tournament/com_scores.csv",
+                "--num-workers",
+                "16"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
     ]
 }
