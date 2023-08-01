@@ -38,7 +38,6 @@ paper.pdf                   -- paper describing our approaches
 ### Dependencies
 This code depends on the following libraries
 ```
-tianshou                  0.5.0
 gymnasium                 0.28.1
 pettingzoo                1.22.3
 wandd                     0.15.0
@@ -46,3 +45,4 @@ pytorch                   1.13.1
 numpy                     1.23.4
 pandas                    1.5.2 
 plotly                    5.12.0
+```
