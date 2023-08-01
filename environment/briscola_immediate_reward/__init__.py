@@ -1,0 +1,5 @@
+from environment.briscola_immediate_reward.dealer import BriscolaDealer as Dealer
+from environment.briscola_immediate_reward.game import BriscolaGame as Game
+from environment.briscola_immediate_reward.judger import BriscolaJudger as Judger
+from environment.briscola_immediate_reward.player import BriscolaPlayer as Player
+from environment.briscola_immediate_reward.round import BriscolaRound as Round
